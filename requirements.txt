@@ -1,0 +1,15 @@
+kivy
+pycups
+pymupdf
+img2pdf
+fastapi
+uvicorn
+sqlalchemy
+razorpay
+pydantic-settings
+jinja2
+python-multipart
+qrcode[pil]
+aiofiles
+python-dotenv
+requests

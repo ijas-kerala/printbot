@@ -1,0 +1,14 @@
+[unit]
+Description=PrintBot Kivy Interface
+After=network.target
+
+[Service]
+User=ijas
+Group=ijas
+WorkingDirectory=/home/ijas/printbot1
+Environment=DISPLAY=:0
+ExecStart=/home/ijas/printbot1/venv/bin/python kivy_app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

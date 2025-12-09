@@ -1,0 +1,13 @@
+[unit]
+Description=PrintBot Backend (FastAPI)
+After=network.target
+
+[Service]
+User=ijas
+Group=ijas
+WorkingDirectory=/home/ijas/printbot1
+ExecStart=/home/ijas/printbot1/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
