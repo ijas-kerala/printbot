@@ -3,8 +3,11 @@ Here is a breakdown of the file structure for your PrintBot Vending Machine:
 📂 Root Directory
 
 .env.example: Template for environment variables. You copy this to .env and fill in your secrets (Razorpay keys, Database URL, Printer Name, etc.).
+
 requirements.txt: List of all Python libraries needed (FastAPI, sqlalchemy, razorpay, kivy, pycups, etc.).
+
 kivy_app.py: The entry point for the Touchscreen Interface. This runs the Kivy app that shows the big QR code and status on the Raspberry Pi screen.
+
 README.md: The master instruction manual. Contains installation steps, hardware setup, and troubleshooting tips.
 printbot-backend.service  & printbot-kivy.service: Systemd configuration files to automatically start the backend and the screen UI when the Raspberry Pi boots up.
 
