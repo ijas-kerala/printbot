@@ -58,13 +58,19 @@ Add your printer to CUPS:
 5. Set default options (A4, etc.).
 
 ### 5. Cloudflare Tunnel
-To expose the local web server to the internet securely:
+To expose the local web server to the internet securely (allowing users to upload from their phones), we use Cloudflare Tunnel.
+
+**See [SETUP.md](SETUP.md) for detailed instructions on how to set up the tunnel and system services.**
+
+Briefly:
 ```bash
+# Install
+./scripts/setup_cloudflared.sh
+
+# Configure (See SETUP.md for Token method recommended for production)
 cloudflared tunnel login
 cloudflared tunnel create printbot
-# Configure tunnel to point to http://localhost:8000
 ```
-Or simply use the token method in `.env` if using managed tunnel.
 
 ## Running the Application
 
