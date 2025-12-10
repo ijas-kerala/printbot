@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     
     PRINTER_NAME: str = "Canon_LBP122dw"
     PRICE_PER_PAGE: float = 5.0
+    
+    CLOUDFLARE_TUNNEL_TOKEN: str = ""
 
     class Config:
         env_file = ".env"

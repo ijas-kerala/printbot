@@ -17,6 +17,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PrintBot API", lifespan=lifespan)
 
+import os
+
+# Ensure static directory exists
+os.makedirs("app/static", exist_ok=True)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
