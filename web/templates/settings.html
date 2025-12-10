@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl border-4 border-base-300">
+    <div class="card-body">
+        <h2 class="card-title text-2xl text-secondary justify-center mb-4">Print Settings</h2>
+
+        <form action="/print-settings" method="post" id="settingsForm">
+            <input type="hidden" name="file_id" value="{{ file_id }}">
+            <input type="hidden" name="total_pages_original" id="originalPages" value="{{ total_pages }}">
+            <input type="hidden" name="price_per_page" id="pricePerPage" value="{{ price_per_page }}">
+
+            <!-- Copies Slider -->
+            <div class="form-control w-full mb-4">
+                <label class="label">
+                    <span class="label-text font-bold">Copies: <span id="copiesVal"
+                            class="text-primary text-xl">1</span></span>
+                </label>
+                <input type="range" min="1" max="10" value="1" class="range range-primary" name="copies"
+                    id="copiesRange" oninput="updatePrice()" />
+                <div class="w-full flex justify-between text-xs px-2 mt-1">
+                    <span>1</span><span>5</span><span>10</span>
+                </div>
+            </div>
+
+            <!-- Page Selection -->
+            <div class="form-control w-full mb-4">
+                <label class="label">
+                    <span class="label-text font-bold">Pages (Total: {{ total_pages }})</span>
+                </label>
+                <input type="text" placeholder="e.g. 1-5, 8, 10-12" class="input input-bordered w-full"
+                    name="page_range" id="pageRange" oninput="updatePrice()" />
+
+                <!-- Quick Chips -->
+                <div class="flex gap-2 mt-2 flex-wrap">
+                    <div class="badge badge-outline cursor-pointer hover:bg-primary hover:text-white"
+                        onclick="setRange('all')">All</div>
+                    <div class="badge badge-outline cursor-pointer hover:bg-primary hover:text-white"
+                        onclick="setRange('odd')">Odd</div>
+                    <div class="badge badge-outline cursor-pointer hover:bg-primary hover:text-white"
+                        onclick="setRange('even')">Even</div>
+                    {% if total_pages > 1 %}
+                    <div class="badge badge-outline cursor-pointer hover:bg-primary hover:text-white"
+                        onclick="setRange('1')">Page 1</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Duplex Toggle -->
+            <div class="form-control mb-6">
+                <label class="label cursor-pointer justify-start gap-4">
+                    <span class="label-text font-bold">Double Sided?</span>
+                    <input type="checkbox" class="toggle toggle-secondary" name="duplex" id="duplexToggle"
+                        onchange="updatePrice()" />
+                    <span id="duplexText" class="label-text-alt text-base-content/50">(Save Paper!)</span>
+                </label>
+            </div>
+
+            <!-- Total Price -->
+            <div class="bg-base-200 p-4 rounded-xl text-center mb-4">
+                <span class="text-sm">Total Price</span>
+                <div class="text-4xl font-black text-accent">₹<span id="totalPrice">0</span></div>
+                <div class="text-xs text-base-content/60" id="pageSummary">Calculating...</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block btn-lg shadow-lg">
+                Pay & Print
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const originalPages = parseInt(document.getElementById('originalPages').value);
+    const pricePerPage = parseFloat(document.getElementById('pricePerPage').value);
+
+    function setRange(type) {
+        const input = document.getElementById('pageRange');
+        if (type === 'all') input.value = ''; // Empty means all
+        else if (type === 'odd') input.value = 'odd'; // backend needs to handle this or we generate specific range
+        else if (type === 'even') input.value = 'even';
+        else if (type === '1') input.value = '1';
+        updatePrice();
+    }
+
+    function updatePrice() {
+        const copies = parseInt(document.getElementById('copiesRange').value);
+        document.getElementById('copiesVal').innerText = copies;
+
+        let estPages = originalPages;
+        const rangeVal = document.getElementById('pageRange').value.trim();
+
+        // Simple client-side estimation (backend is source of truth)
+        if (rangeVal) {
+            // Very basic length check, mostly for feedback
+            // In a real app, complex logic here or HTMX verification
+            if (rangeVal.includes('-')) {
+                // rough guess
+            }
+        }
+
+        const isDuplex = document.getElementById('duplexToggle').checked;
+
+        let finalSheetCount = estPages;
+        if (isDuplex) {
+            finalSheetCount = Math.ceil(estPages / 2);
+        }
+
+        const totalSheets = finalSheetCount * copies;
+        const total = (totalSheets * pricePerPage).toFixed(2);
+
+        document.getElementById('totalPrice').innerText = total;
+        document.getElementById('pageSummary').innerText = `${totalSheets} sheets (${estPages} pgs x ${copies})`;
+    }
+
+    // Init
+    updatePrice();
+</script>
+{% endblock %}

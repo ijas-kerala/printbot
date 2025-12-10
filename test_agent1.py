@@ -5,9 +5,9 @@ import os
 sys.path.append(os.getcwd())
 
 try:
-    from app.core.database import Base, engine, SessionLocal
-    from app.models.models import Job, PricingRule, Payment
-    from app.services.razorpay_service import razorpay_service
+    from core.database import Base, engine, SessionLocal
+    from web.models.models import Job, PricingRule, Payment
+    from web.services.razorpay_service import razorpay_service
     print("Imports successful.")
 except ImportError as e:
     print(f"Import failed: {e}")

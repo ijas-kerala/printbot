@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl border-4 border-indigo-500 w-full max-w-sm">
+    <div class="card-body items-center text-center">
+        <h2 class="card-title text-2xl text-indigo-600 mb-4">Admin Access</h2>
+
+        <!-- Tabs -->
+        <div role="tablist" class="tabs tabs-boxed mb-4">
+            <a role="tab" class="tab tab-active" onclick="switchTab('pattern')">Pattern</a>
+            <a role="tab" class="tab" onclick="switchTab('pin')">PIN</a>
+        </div>
+
+        <!-- Pattern Lock Section -->
+        <div id="pattern-section" class="w-full flex flex-col items-center">
+            <p class="text-xs text-base-content/60 mb-2">Draw 'Z' Pattern to Unlock</p>
+            <canvas id="patternLock" width="250" height="250" class="bg-base-200 rounded-xl touch-none"></canvas>
+            <form id="patternForm" action="/admin/login/pattern" method="post" class="hidden">
+                <input type="hidden" name="pattern" id="patternInput">
+            </form>
+        </div>
+
+        <!-- PIN Section -->
+        <form id="pin-section" action="/admin/login" method="post" class="hidden w-full">
+            <div class="form-control w-full">
+                <input type="text" name="username" placeholder="Username" class="input input-bordered mb-2"
+                    value="admin" readonly />
+                <input type="password" name="password" placeholder="PIN / Password" class="input input-bordered" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block mt-4">Unlock</button>
+        </form>
+
+        {% if error %}
+        <div class="alert alert-error mt-4 p-2 text-sm">
+            {{ error }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-pattern-lock/1.0.0/pattern-lock.min.js"></script>
+<script>
+    // Simple mock pattern lock logic if library fails, but we'll try to impl simple canvas logic
+    const canvas = document.getElementById('patternLock');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let points = [];
+    const nodes = [
+        { x: 50, y: 50, id: 1 }, { x: 125, y: 50, id: 2 }, { x: 200, y: 50, id: 3 },
+        { x: 50, y: 125, id: 4 }, { x: 125, y: 125, id: 5 }, { x: 200, y: 125, id: 6 },
+        { x: 50, y: 200, id: 7 }, { x: 125, y: 200, id: 8 }, { x: 200, y: 200, id: 9 }
+    ];
+    let path = [];
+
+    function drawGrid() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw path
+        if (points.length > 0) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#6366f1'; // Indigo
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            if (isDrawing && currentPos) {
+                ctx.lineTo(currentPos.x, currentPos.y);
+            }
+            ctx.stroke();
+        }
+
+        // Draw nodes
+        nodes.forEach(node => {
+            const isActive = path.includes(node.id);
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 10, 0, Math.PI * 2);
+            ctx.fillStyle = isActive ? '#6366f1' : '#cbd5e1';
+            ctx.fill();
+        });
+    }
+
+    let currentPos = null;
+
+    function getTouchPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        return {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top
+        };
+    }
+
+    function checkNode(pos) {
+        nodes.forEach(node => {
+            const dx = pos.x - node.x;
+            const dy = pos.y - node.y;
+            if (dx * dx + dy * dy < 900) { // 30px radius squared
+                if (!path.includes(node.id)) {
+                    path.push(node.id);
+                    points.push({ x: node.x, y: node.y });
+                    // Vibration feedback
+                    if (navigator.vibrate) navigator.vibrate(20);
+                }
+            }
+        });
+    }
+
+    function start(e) {
+        e.preventDefault();
+        isDrawing = true;
+        path = [];
+        points = [];
+        const pos = getTouchPos(e);
+        checkNode(pos);
+        drawGrid();
+    }
+
+    function move(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        currentPos = getTouchPos(e);
+        checkNode(currentPos);
+        drawGrid();
+    }
+
+    function end(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        currentPos = null;
+        drawGrid();
+
+        if (path.length > 0) {
+            document.getElementById('patternInput').value = path.join('');
+            document.getElementById('patternForm').submit();
+        }
+    }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end);
+
+    drawGrid();
+
+    function switchTab(tab) {
+        const tabs = document.querySelectorAll('.tab');
+        tabs.forEach(t => t.classList.remove('tab-active'));
+        event.target.classList.add('tab-active');
+
+        if (tab === 'pattern') {
+            document.getElementById('pattern-section').classList.remove('hidden');
+            document.getElementById('pin-section').classList.add('hidden');
+        } else {
+            document.getElementById('pattern-section').classList.add('hidden');
+            document.getElementById('pin-section').classList.remove('hidden');
+        }
+    }
+</script>
+{% endblock %}

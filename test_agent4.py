@@ -10,7 +10,7 @@ sys.path.append(os.getcwd())
 # but printer_service imports cups at top level.
 # We will intercept the class instance in the test.
 
-from app.services.printer_service import printer_service
+from web.services.printer_service import printer_service
 
 def test_conversion():
     # create dummy text file

@@ -3,17 +3,23 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.core.database import get_db
-from app.models.models import Job, PricingRule
-from app.core.config import settings
+from core.database import get_db
+from web.models.models import Job, PricingRule
+from core.config import settings
 import datetime
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="app/templates")
 
-# Simple Hardcoded credential for now
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "password123" 
+# Pattern Check (Mock: '1475369' is Z shape on 3x3 grid: 1-2-3-5-7-8-9? No standard Z is 1-2-3-5-7-8-9 or 1-2-3-6-9-8-7-4-1? 
+# "Z" shape: 1->2->3 -> 5 -> 7->8->9 
+# Wait, standard keypad:
+# 1 2 3
+# 4 5 6
+# 7 8 9
+# Z pattern: 1->2->3 -> 5 -> 7->8->9
+ADMIN_PATTERN = "1235789" 
+ADMIN_PIN = "1234"
 
 def get_current_user(request: Request):
     user = request.cookies.get("admin_user")
@@ -25,15 +31,23 @@ def get_current_user(request: Request):
 def login_page(request: Request):
     return templates.TemplateResponse("admin_login.html", {"request": request})
 
-@router.post("/login")
-def login(response: Response, username: str = Form(...), password: str = Form(...)):
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+@router.post("/login/pattern")
+def login_pattern(response: Response, pattern: str = Form(...)):
+    if pattern == ADMIN_PATTERN:
         response = RedirectResponse(url="/admin/dashboard", status_code=303)
         response.set_cookie(key="admin_user", value="admin")
         return response
     else:
-        # Redirect back with error? For now just fail.
-        return RedirectResponse(url="/admin/login?error=Invalid Credentials", status_code=303)
+        return RedirectResponse(url="/admin/login?error=Invalid Pattern", status_code=303)
+
+@router.post("/login")
+def login(response: Response, password: str = Form(...)): # PIN input usually named password
+    if password == ADMIN_PIN:
+        response = RedirectResponse(url="/admin/dashboard", status_code=303)
+        response.set_cookie(key="admin_user", value="admin")
+        return response
+    else:
+        return RedirectResponse(url="/admin/login?error=Invalid PIN", status_code=303)
 
 @router.get("/logout")
 def logout(response: Response):
@@ -59,13 +73,17 @@ def dashboard(request: Request, user: str = Depends(get_current_user), db: Sessi
     revenue_query = db.query(func.sum(Job.total_cost)).filter(Job.status.in_(["paid", "processing", "printing", "completed"])).scalar()
     total_revenue = revenue_query if revenue_query else 0.0
 
+    # Recent Jobs
+    recent_jobs = db.query(Job).order_by(Job.created_at.desc()).limit(10).all()
+
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
         "total_jobs": total_jobs,
         "completed_jobs": completed_jobs,
         "failed_jobs": failed_jobs,
         "total_revenue": total_revenue,
-        "price_per_page": settings.PRICE_PER_PAGE
+        "price_per_page": settings.PRICE_PER_PAGE,
+        "recent_jobs": recent_jobs
     })
 
 @router.get("/api/stats")

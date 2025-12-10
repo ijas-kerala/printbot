@@ -1,4 +1,5 @@
 kivy
+kivymd
 pycups
 pymupdf
 img2pdf

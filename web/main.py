@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.core.database import engine, Base
+from core.database import engine, Base
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
 from contextlib import asynccontextmanager
-from app.services.job_worker import start_worker
+from web.services.job_worker import start_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,17 +20,19 @@ app = FastAPI(title="PrintBot API", lifespan=lifespan)
 import os
 
 # Ensure static directory exists
-os.makedirs("app/static", exist_ok=True)
+# Ensure static directory exists
+os.makedirs("web/static", exist_ok=True)
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="web/static"), name="static")
 
-from app.routers import upload, print_settings, status, admin
+from web.routers import upload, print_settings, status, admin, webhooks
 
 app.include_router(upload.router)
 app.include_router(print_settings.router)
 app.include_router(status.router)
 app.include_router(admin.router)
+app.include_router(webhooks.router)
 
 @app.get("/")
 def read_root():

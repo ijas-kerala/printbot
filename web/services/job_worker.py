@@ -1,9 +1,9 @@
 import time
 import threading
 from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
-from app.models.models import Job
-from app.services.printer_service import printer_service
+from core.database import SessionLocal
+from web.models.models import Job
+from web.services.printer_service import printer_service
 import traceback
 
 def process_jobs():
@@ -36,7 +36,8 @@ def process_jobs():
                         final_pdf, 
                         job.id, 
                         copies=job.copies, 
-                        is_duplex=job.is_duplex
+                        is_duplex=job.is_duplex,
+                        page_range=job.page_range
                     )
                     
                     if cups_job_id:

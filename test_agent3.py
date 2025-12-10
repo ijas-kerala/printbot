@@ -3,7 +3,7 @@ import os
 sys.path.append(os.getcwd())
 
 from fastapi.testclient import TestClient
-from app.main import app
+from web.main import app
 
 def test_status_endpoint():
     client = TestClient(app)

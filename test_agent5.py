@@ -3,9 +3,9 @@ import os
 sys.path.append(os.getcwd())
 
 from fastapi.testclient import TestClient
-from app.main import app
-from app.core.database import Base, engine, SessionLocal
-from app.models.models import Job
+from web.main import app
+from core.database import Base, engine, SessionLocal
+from web.models.models import Job
 
 # Seed DB for charts
 def seed_data():

@@ -5,8 +5,8 @@ import shutil
 sys.path.append(os.getcwd())
 
 from fastapi.testclient import TestClient
-from app.main import app
-from app.core.database import Base, engine
+from web.main import app
+from core.database import Base, engine
 
 client = TestClient(app)
 

@@ -4,7 +4,7 @@ import cups
 import fitz  # PyMuPDF
 import img2pdf
 from PIL import Image
-from app.core.config import settings
+from core.config import settings
 
 class PrinterService:
     def __init__(self):
@@ -48,17 +48,27 @@ class PrinterService:
             print(f"Conversion failed: {e}")
             return None
 
-    def print_job(self, file_path: str, job_id: int, copies: int = 1, is_duplex: bool = False):
+    def print_job(self, file_path: str, job_id: int, copies: int = 1, is_duplex: bool = False, page_range: str = None):
         """
-        Sends the PDF to CUPS.
+        Sends the PDF to CUPS (or Mocks it).
         """
         if not os.path.exists(file_path):
             print(f"File not found: {file_path}")
             return False
+            
+        # 1. Apply Page Slicing
+        to_print_path = self.apply_page_range(file_path, page_range)
 
+        # 2. Mock Mode
+        if self.mock_mode:
+            print(f" [MOCK PRINT] File: {to_print_path} | Copies: {copies} | Duplex: {is_duplex}")
+            return 123456 # Fake Job ID
+
+        # 3. Real CUPS Mode
         options = {
             "copies": str(copies),
             "media": "iso_a4_210x297mm", # Default to A4
+            # "fit-to-page": "True"
         }
 
         if is_duplex:
@@ -71,16 +81,17 @@ class PrinterService:
         try:
             # Check if printer exists
             printers = self.conn.getPrinters()
-            if self.printer_name not in printers:
+            printer_target = self.printer_name
+            
+            if printer_target not in printers:
                 print(f"Printer {self.printer_name} not found. Available: {list(printers.keys())}")
-                # Fallback to first available or error?
-                # For now, just print to default if mismatch, or fail.
-                if not printers:
+                if printers:
+                    printer_target = list(printers.keys())[0] # Fallback
+                else:
                     raise Exception("No printers found in CUPS.")
-                # self.printer_name = list(printers.keys())[0] # Auto-fallback? User requested Canon specifically.
 
-            print_job_id = self.conn.printFile(self.printer_name, file_path, job_title, options)
-            print(f"Sent to CUPS. Job ID: {print_job_id}")
+            print_job_id = self.conn.printFile(printer_target, to_print_path, job_title, options)
+            print(f"Sent to CUPS ({printer_target}). Job ID: {print_job_id}")
             return print_job_id
         except Exception as e:
             print(f"Printing failed: {e}")

@@ -1,19 +1,19 @@
-from fastapi import APIRouter, File, UploadFile, Request, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Request, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from app.core.database import get_db
-from app.models.models import Job
 from sqlalchemy.orm import Session
+from core.database import get_db
+from web.models.models import Job
 import shutil
 import os
 import uuid
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="web/templates")
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.get("/")
 def get_upload_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
@@ -49,6 +49,6 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
     db.refresh(new_job)
     
     # Redirect to settings page (return HTMX snippet/redirect)
-    from app.routers.print_settings import render_settings
+    from web.routers.print_settings import render_settings
     return render_settings(request, new_job.id, db)
 

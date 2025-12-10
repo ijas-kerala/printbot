@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl border-4 border-success">
+    <div class="card-body items-center text-center">
+        <!-- Success Mascot -->
+        <div class="avatar mb-4">
+            <div class="w-32 rounded-full bg-success/20 p-4">
+                <img src="/static/printo_happy.png" alt="Happy Printo" />
+            </div>
+        </div>
+
+        <h2 class="card-title text-3xl font-black text-success mb-2">Yay! Payment Connection!</h2>
+        <p class="text-lg mb-6">Your file is being printed now.</p>
+
+        <a href="/" class="btn btn-primary btn-wide shadow-lg">
+            Print Another File
+        </a>
+    </div>
+</div>
+
+<!-- Confetti Script -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+    // Launch confetti
+    var duration = 3 * 1000;
+    var animationEnd = Date.now() + duration;
+    var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    function random(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    var interval = setInterval(function () {
+        var timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+            return clearInterval(interval);
+        }
+
+        var particleCount = 50 * (timeLeft / duration);
+        // since particles fall down, start a bit higher than random
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.1, 0.3), y: Math.random() - 0.2 } }));
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.7, 0.9), y: Math.random() - 0.2 } }));
+    }, 250);
+</script>
+{% endblock %}

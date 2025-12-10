@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl border-4 border-base-300">
+    <div class="card-body items-center text-center">
+        <!-- Printo Spinning Animation -->
+        <div class="avatar mb-2">
+            <div class="w-20 rounded-full bg-white p-2 animate-bounce">
+                <img src="/static/printo_idle.png" alt="Printo" />
+            </div>
+        </div>
+
+        <h2 class="card-title text-xl mb-4">Waiting for Payment...</h2>
+
+        <!-- QR Code Display -->
+        <div class="bg-white p-4 rounded-xl shadow-inner mb-4">
+            <!-- If we have a direct SVG/IMG from Razorpay -->
+            {% if qr_url %}
+            <img src="{{ qr_url }}" class="w-48 h-48 mx-auto" alt="Payment QR Code" />
+            {% else %}
+            <!-- Fallback if we just have a link (generate local QR) -->
+            <div id="local-qr"></div>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+            <script>
+                new QRCode(document.getElementById("local-qr"), {
+                    text: "{{ payment_link }}",
+                    width: 192,
+                    height: 192
+                });
+            </script>
+            {% endif %}
+        </div>
+
+        <p class="text-2xl font-black text-primary mb-2">₹{{ amount }}</p>
+        <p class="text-sm text-base-content/60">Scan with any UPI App<br>(GPay, Paytm, PhonePe)</p>
+
+        <!-- Manual Link Button -->
+        <a href="{{ payment_link }}" target="_blank" class="btn btn-outline btn-sm mt-4">
+            Open Payment App
+        </a>
+
+        <!-- HTMX Polling for Status -->
+        <!-- Trigger every 3s, target body to replace with success page if redirected or update specific div -->
+        <div hx-get="/payment-status/{{ order_id }}" hx-trigger="every 3s" hx-swap="none" class="hidden">
+            <!-- The backend should return HX-Redirect header on success -->
+        </div>
+
+    </div>
+</div>
+{% endblock %}

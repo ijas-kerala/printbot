@@ -1,15 +1,17 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, CheckConstraint
 from sqlalchemy.sql import func
-from app.core.database import Base
+from core.database import Base
 
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True) # UUID
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     page_count = Column(Integer, default=0)
+    total_pages = Column(Integer, default=0) # Total pages in doc (for range calc)
     copies = Column(Integer, default=1)
+    page_range = Column(String, nullable=True) # e.g "1-5,8"
     is_duplex = Column(Boolean, default=False)
     status = Column(String, default="pending")  # pending, paid, printing, completed, failed
     created_at = Column(DateTime(timezone=True), server_default=func.now())

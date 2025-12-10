@@ -2,17 +2,50 @@ import razorpay
 import qrcode
 import io
 import base64
-from app.core.config import settings
+from core.config import settings
 
 class RazorpayService:
     def __init__(self):
-        self.client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        self.enabled = False
+        if settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and settings.RAZORPAY_KEY_ID != "your_key_id_here":
+            try:
+                self.client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                self.enabled = True
+            except Exception as e:
+                print(f"Razorpay Client Init Failed: {e}")
+        else:
+            print("⚠ Razorpay Keys missing or default. Payment Service running in MOCK mode.")
 
     def create_payment_link(self, amount: float, description: str, reference_id: str, customer_email: str = "guest@printbot.local", customer_contact: str = "9999999999"):
         """
         Creates a Razorpay Payment Link and returns the short URL and a base64 QR code.
-        Amount is in INR, will be converted to paise.
+        If disabled, returns a MOCK link.
         """
+        # MOCK MODE
+        if not self.enabled:
+            print("Creating MOCK Payment Link")
+            try:
+                # Generate a dummy QR encoding the mock link
+                mock_url = f"http://mock-payment?ref={reference_id}&amt={amount}"
+                qr = qrcode.QRCode(box_size=10, border=4)
+                qr.add_data(mock_url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                buffered = io.BytesIO()
+                img.save(buffered, format="PNG")
+                img_str = base64.b64encode(buffered.getvalue()).decode()
+                
+                return {
+                    "short_url": mock_url,
+                    "payment_link_id": f"plink_mock_{reference_id}",
+                    "qr_code_base64": img_str,
+                    "status": "created"
+                } 
+            except Exception as e:
+                print(f"Mock QR Gen Error: {e}")
+                return None
+
+        # REAL MODE
         amount_paise = int(amount * 100)
         
         data = {
@@ -33,7 +66,9 @@ class RazorpayService:
             "reminder_enable": False,
             "notes": {
                 "source": "PrintBot Kiosk"
-            }
+            },
+            # "callback_url": "https://your-domain.com/payment-success", # Optional
+            # "callback_method": "get"
         }
         
         try:

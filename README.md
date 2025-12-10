@@ -1,12 +1,57 @@
-# PrintBot Vending Machine
+# 🤖 PrintJoy Machine (PrintBot V2)
 
-A complete, production-ready printing vending machine solution for Raspberry Pi 4. Features a Kivy touchscreen UI, mobile-friendly file upload (HTMX/Tailwind), automatic pricing, Razorpay UPI integration, and CUPS printing.
+A joyful, complete printing vending machine software stack for Raspberry Pi.
+
+## 🌟 Features
+
+*   **Playful Kiosk UI**: KivyMD touchscreen interface with "Printo" mascot.
+*   **Mobile Web Flow**: QR code upload, page selection, and payment (Tailwind/DaisyUI).
+*   **Payment System**: Razorpay UPI integration (with Dev/Mock mode).
+*   **Robust Printing**: PyMuPDF page slicing and CUPS integration.
+*   **Admin Dashboard**: Secure pattern-lock login, revenue stats, and live pricing.
+
+## 🛠️ Installation
+
+1.  **Clone & Setup**:
+    ```bash
+    git clone <repo>
+    cd printbot1
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+
+2.  **Configuration**:
+    Copy `.env.example` to `.env` and fill in your keys.
+    ```bash
+    cp .env.example .env
+    nano .env
+    ```
+    *If no Razorpay keys are provided, the system runs in MOCK Payment mode.*
+
+3.  **Launch**:
+    ```bash
+    ./launch.sh
+    ```
+
+## 📂 Project Structure
+
+*   `kiosk/`: Touchscreen application (Python/KivyMD).
+*   `web/`: Backend APIs and Mobile Web Templates (FastAPI).
+*   `core/`: Shared config and database.
+*   `b_process/`: Background job processing.
+
+## 🛡️ Admin Access
+
+*   URL: `/admin/login`
+*   Pattern: "Z" shape (1-2-3-5-7-8-9)
+*   Default PIN: `1234`
+-ready printing vending machine solution for Raspberry Pi 4. Features a Kivy touchscreen UI, mobile-friendly file upload (HTMX/Tailwind), automatic pricing, Razorpay UPI integration, and CUPS printing.
 
 ## Features
 - **Touchscreen UI**: Kivy-based "Attract Mode" with status updates.
 - **Mobile Upload**: Scan QR code to open a local web app for file upload.
 - **Format Support**: PDF, DOCX, JPG, PNG (auto-converted to PDF).
-- **Print Settings**: Copies, Page Range, Duplex (Long-edge).
 - **Payment**: Dynamic Razorpay UPI QR code generation and polling.
 - **Admin Dashboard**: Secure stats, revenue charts, job logs, and pricing editor.
 - **Reliability**: Queue management, auto-retry, and systemd service integration.
