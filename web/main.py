@@ -48,11 +48,7 @@ app.include_router(status.router)
 app.include_router(admin.router)
 app.include_router(webhooks.router)
 
-@app.get("/")
-def read_root():
-    # Redirect root to upload page for now, or serve the upload page directly
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/")
+
 
 @app.get("/health")
 def health_check():

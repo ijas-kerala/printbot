@@ -14,6 +14,7 @@ templates = Jinja2Templates(directory="web/templates")
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+@router.get("/")
 def get_upload_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
