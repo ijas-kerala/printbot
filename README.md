@@ -94,3 +94,41 @@ sudo systemctl start printbot-kivy
 - **Payment Not Detected**: Check Razorpay Webhook or Polling status in `web/services/razorpay_service.py`.
 
 License: MIT
+
+## 🚀 Deployment on New Devices
+
+Follow these steps to deploy "PrintJoy" on a fresh Raspberry Pi or Linux machine.
+
+### 1. System Requirements & Permissions
+*   **OS**: Raspberry Pi OS (Bullseye/Bookworm) or Ubuntu.
+*   **User Groups**: The user must have permission to access printers and input devices.
+    ```bash
+    sudo usermod -a -G lp,input,video $USER
+    ```
+*   **Dependencies**: Ensure system dependencies for Kivy/SDL2 are installed.
+    ```bash
+    sudo apt install python3-pip python3-venv libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev libgstreamer1.0-gstreamer-plugins-base libgstreamer1.0-dev
+    ```
+*   **Directory Ownership**: Ensure the user running the app owns the project directory.
+    ```bash
+    sudo chown -R $USER:$USER /path/to/printbot1
+    ```
+
+### 2. Environment Variables
+Create a `.env` file in the project root.
+| Variable | Description | Default/Example |
+| :--- | :--- | :--- |
+| `RAZORPAY_KEY_ID` | Razorpay API Key | `rzp_test_...` |
+| `RAZORPAY_KEY_SECRET` | Razorpay Secret | `YOUR_SECRET` |
+| `ADMIN_PIN` | Dashboard Access PIN | `1234` |
+| `ENV` | Environment Mode | `development` / `production` |
+
+### 3. Kiosk Hardening (Raspberry Pi)
+The application automatically defaults `DISPLAY` to `:0`.
+If using the official RPi Touchscreen, ensure `dtoverlay=vc4-kms-v3d` is in `/boot/config.txt`.
+
+### 4. Testing Checklist
+- [ ] **Startup**: Run `./launch.sh`. Verify "Mascot" appears.
+- [ ] **Logging**: Check `logs/crash.log` is created.
+- [ ] **Printer**: Ensure CUPS is running (`localhost:631`) and default printer is set.
+- [ ] **Payment**: Scan QR code on specific test page to verify Razorpay mock/live mode.

@@ -112,9 +112,29 @@ def restart_program():
     os.execl(python, python, *sys.argv)
 
 if __name__ == '__main__':
-    CRASH_LOG_PATH = "/home/ijas/printjoy_logs/kivy_crash.log"
-    os.makedirs(os.path.dirname(CRASH_LOG_PATH), exist_ok=True)
-    
+
+    # RPi Hardening: Ensure DISPLAY is set for Kivy
+    if "DISPLAY" not in os.environ:
+        print("WARNING: DISPLAY env var not set. Defaulting to :0 for Kiosk mode.")
+        os.environ["DISPLAY"] = ":0"
+
+    # NOTE: KivyMD 1.2.0+ Upgrade Note:
+    # If upgrading KivyMD, ensure theme_cls usage is compatible.
+    # Currently targeted for KivyMD 1.1.1 logic.
+
+    # Dynamic Log Path (Fixes PermissionError on new devices)
+    # Tries to log to project/logs/crash.log, falls back to /tmp/printbot_crash.log
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_dir = os.path.join(project_root, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        CRASH_LOG_PATH = os.path.join(log_dir, "crash.log")
+        # Test write permission
+        with open(CRASH_LOG_PATH, "a"): pass
+    except OSError:
+        print(f"WARNING: No write permission for {log_dir}. Fallback to /tmp")
+        CRASH_LOG_PATH = "/tmp/printbot_crash.log"
+
     try:
         PrintJoyApp().run()
     except Exception as e:
@@ -122,11 +142,16 @@ if __name__ == '__main__':
         import datetime
         
         timestamp = datetime.datetime.now().isoformat()
-        with open(CRASH_LOG_PATH, "a") as f:
-            f.write(f"\n[{timestamp}] CRITICAL CRASH:\n")
-            traceback.print_exc(file=f)
-            
-        print("CRITICAL ERROR CAUGHT. RESTARTING IN 3 SECONDS...")
+        try:
+            with open(CRASH_LOG_PATH, "a") as f:
+                f.write(f"\n[{timestamp}] CRITICAL CRASH:\n")
+                traceback.print_exc(file=f)
+            print(f"CRITICAL ERROR CAUGHT. LOGGED TO {CRASH_LOG_PATH}")
+        except Exception as log_err:
+             print(f"CRITICAL ERROR CAUGHT (LOGGING FAILED): {e}")
+             print(f"Logging Error: {log_err}")
+
+        print("RESTARTING IN 3 SECONDS...")
         try:
             # Show a crude error if possible, or just sleep
             time.sleep(3)
