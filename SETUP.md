@@ -10,7 +10,6 @@ This guide provides detailed instructions on how to set up the PrintBot Print Ve
 - **Domain**: A domain name managed on Cloudflare (required for Tunnel).
 
 ## 2. Initial Installation
-
 Run the automated setup commands if you haven't already:
 
 ```bash
@@ -121,7 +120,7 @@ Check the status of the services:
 # Backend Status
 sudo systemctl status printbot-backend
 
-# Kivy UI Status
+# Kiosk UI Status
 sudo systemctl status printbot-kivy
 ```
 
@@ -136,6 +135,6 @@ sudo systemctl status printbot-kivy
 - Open `http://<PI_IP>:8000` in a browser.
 
 ## 6. Development vs Production
-- **Development**: Update `.env` with `ENV=development` and run manually (`uvicorn ...`). 
+- **Development**: Update `.env` with `ENV=development` and run manually.
 - **Production**: Update `.env` with `ENV=production`. Ensure `DEBUG=False`. Use systemd services.
 
