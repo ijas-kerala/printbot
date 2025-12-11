@@ -1,14 +1,19 @@
-[unit]
-Description=PrintBot Kivy Interface
-After=network.target
+[Unit]
+Description=PrintJoy Kiosk Interface
+After=network.target graphical.target
+Wants=graphical.target
 
 [Service]
-User=ijas
-Group=ijas
+User=pi
 WorkingDirectory=/home/ijas/printbot1
 Environment=DISPLAY=:0
-ExecStart=/home/ijas/printbot1/venv/bin/python kivy_app.py
+Environment=KIVY_NO_CONSOLELOG=1
+ExecStart=/home/ijas/printbot1/venv/bin/python3 kiosk/main.py
 Restart=always
+RestartSec=3
+WatchdogSec=10
+StandardOutput=append:/home/ijas/printjoy_logs/kiosk.log
+StandardError=append:/home/ijas/printjoy_logs/kiosk_error.log
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

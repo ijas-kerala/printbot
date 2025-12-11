@@ -11,15 +11,24 @@ def migrate_db():
     try:
         # Check if column exists
         cursor.execute("PRAGMA table_info(jobs)")
-        columns = [info[1] for info in cursor.fetchall()]
+        existing_columns = [info[1] for info in cursor.fetchall()]
         
-        if "total_pages" not in columns:
-            print("Adding missing column 'total_pages' to 'jobs' table...")
-            cursor.execute("ALTER TABLE jobs ADD COLUMN total_pages INTEGER DEFAULT 0")
-            conn.commit()
-            print("Migration successful.")
-        else:
-            print("Column 'total_pages' already exists. No action needed.")
+        expected_columns = {
+            "total_pages": "INTEGER DEFAULT 0",
+            "page_range": "STRING NULL"
+        }
+
+        for col_name, col_def in expected_columns.items():
+            if col_name not in existing_columns:
+                print(f"Adding missing column '{col_name}' to 'jobs' table...")
+                try:
+                    cursor.execute(f"ALTER TABLE jobs ADD COLUMN {col_name} {col_def}")
+                    conn.commit()
+                    print(f"Added column '{col_name}'.")
+                except Exception as e:
+                    print(f"Failed to add column '{col_name}': {e}")
+            else:
+                print(f"Column '{col_name}' already exists. No action needed.")
             
     except Exception as e:
         print(f"Error during migration: {e}")

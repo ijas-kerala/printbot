@@ -8,8 +8,14 @@ from core.config import settings
 
 class PrinterService:
     def __init__(self):
-        self.conn = cups.Connection()
+        try:
+            self.conn = cups.Connection()
+        except:
+             # If CUPS not running, fallback to mock possibly, or just let it fail later
+            self.conn = None 
+            
         self.printer_name = settings.PRINTER_NAME
+        self.mock_mode = getattr(settings, "MOCK_PRINTER", False)
 
     def convert_to_pdf(self, input_path: str) -> str:
         """
@@ -56,8 +62,9 @@ class PrinterService:
             print(f"File not found: {file_path}")
             return False
             
-        # 1. Apply Page Slicing
-        to_print_path = self.apply_page_range(file_path, page_range)
+        # 1. Apply Page Slicing (Reliability Upgrade)
+        to_print_path = self.apply_page_range(file_path, page_range) # Returns a new temp file or original
+
 
         # 2. Mock Mode
         if self.mock_mode:
@@ -97,4 +104,44 @@ class PrinterService:
             print(f"Printing failed: {e}")
             return None
 
+    def apply_page_range(self, file_path: str, range_str: str) -> str:
+        """
+        Creates a temporary PDF containing only the requested pages.
+        """
+        if not range_str or not range_str.strip():
+            return file_path
+
+        from pypdf import PdfReader, PdfWriter
+        from core.printing.page_utils import parse_page_range
+        
+        try:
+            reader = PdfReader(file_path)
+            total_pages = len(reader.pages)
+            pages_to_keep = parse_page_range(range_str, total_pages)
+            
+            # If requesting all pages, just return original
+            if len(pages_to_keep) == total_pages:
+                # Check if it's actually sequential 0..N-1
+                if pages_to_keep == list(range(total_pages)):
+                    return file_path
+            
+            output_filename = f"{os.path.splitext(file_path)[0]}_sliced.pdf"
+            writer = PdfWriter()
+            
+            for p_idx in pages_to_keep:
+                writer.add_page(reader.pages[p_idx])
+                
+            with open(output_filename, "wb") as f:
+                writer.write(f)
+                
+            print(f"Created sliced PDF: {output_filename} with pages {pages_to_keep}")
+            return output_filename
+            
+        except Exception as e:
+            print(f"Error applying page range: {e}")
+            # Fallback to printing whole document? Or fail safely?
+            # Requirement: "Zero exceptions" - better to fail than print wrong pages.
+            raise e
+
 printer_service = PrinterService()
+
