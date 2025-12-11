@@ -1,7 +1,7 @@
 import os
 import sys
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager
+from kivymd.uix.screenmanager import MDScreenManager
 from kivymd.app import MDApp
 from kivymd.uix.transition import MDFadeSlideTransition
 from kivy.clock import Clock
@@ -23,7 +23,7 @@ class PrintJoyApp(MDApp):
         self.icon = "kiosk/assets/icon.png"
 
         # Screen Manager
-        sm = ScreenManager(transition=MDFadeSlideTransition())
+        sm = MDScreenManager(transition=MDFadeSlideTransition())
         sm.add_widget(AttractScreen(name='attract'))
         sm.add_widget(ConnectScreen(name='connect'))
         sm.add_widget(StatusScreen(name='status'))
