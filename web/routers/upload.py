@@ -79,8 +79,10 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
         db.refresh(new_job)
         
         # Redirect to settings page
-        from web.routers.print_settings import render_settings
-        return await render_settings(request, new_job.id, db)
+        return RedirectResponse(
+            url=f"/print-settings?file_id={new_job.id}", 
+            status_code=303
+        )
 
     except Exception as e:
         print(f"Upload Error: {e}")
