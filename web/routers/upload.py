@@ -68,6 +68,7 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
             page_count = 1
 
         new_job = Job(
+            id=str(uuid.uuid4()),
             filename=file.filename,
             file_path=file_path,
             page_count=page_count,
