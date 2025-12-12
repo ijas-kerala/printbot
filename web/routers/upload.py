@@ -18,38 +18,70 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def get_upload_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+import fitz  # PyMuPDF
+
 @router.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Validate file type
-    allowed_types = ["application/pdf", "image/jpeg", "image/png", 
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
-    
-    if file.content_type not in allowed_types:
-        return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid file type"})
-
-    # Save file
-    file_ext = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        # 1. Validate file type
+        allowed_types = ["application/pdf", "image/jpeg", "image/png", 
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
         
-    # Create Job record (Basic stub for page count)
-    # TODO: Implement real page counting logic in Agent 4
-    mock_page_count = 1 
-    
-    new_job = Job(
-        filename=file.filename,
-        file_path=file_path,
-        page_count=mock_page_count,
-        status="uploaded"
-    )
-    db.add(new_job)
-    db.commit()
-    db.refresh(new_job)
-    
-    # Redirect to settings page (return HTMX snippet/redirect)
-    from web.routers.print_settings import render_settings
-    return render_settings(request, new_job.id, db)
+        if file.content_type not in allowed_types:
+             return templates.TemplateResponse("index.html", {"request": request, "error": "Invalid file type. Only PDF, JPG, PNG, DOCX allowed."})
+
+        # 2. Validate Size (90MB Limit)
+        MAX_SIZE = 90 * 1024 * 1024
+        # Check size if content-length header is present (fast fail)
+        if request.headers.get('content-length') and int(request.headers.get('content-length')) > MAX_SIZE:
+             return templates.TemplateResponse("index.html", {"request": request, "error": "File too large (Max 90MB)"})
+        
+        # 3. Save file safely
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        # Read and write chunks to avoid memory spikes, and check size while writing
+        size = 0
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = await file.read(1024 * 1024) # 1MB chunks
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_SIZE:
+                    os.remove(file_path) # Clean up partial
+                    return templates.TemplateResponse("index.html", {"request": request, "error": "File too large (Max 90MB)"})
+                buffer.write(chunk)
+            
+        # 4. Accurate Page Counting
+        page_count = 1
+        try:
+            if file_ext == ".pdf":
+                doc = fitz.open(file_path)
+                page_count = doc.page_count
+                doc.close()
+            # Images and DOCX default to 1 for now (DOCX calculated after conversion)
+        except Exception as e:
+            print(f"Page count error: {e}")
+            # Fallback to 1, don't fail upload just for this
+            page_count = 1
+
+        new_job = Job(
+            filename=file.filename,
+            file_path=file_path,
+            page_count=page_count,
+            status="uploaded"
+        )
+        db.add(new_job)
+        db.commit()
+        db.refresh(new_job)
+        
+        # Redirect to settings page
+        from web.routers.print_settings import render_settings
+        return await render_settings(request, new_job.id, db)
+
+    except Exception as e:
+        print(f"Upload Error: {e}")
+        return templates.TemplateResponse("index.html", {"request": request, "error": "System Error during upload. Please try again."})
 

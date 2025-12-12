@@ -99,9 +99,10 @@ class PrintJoyApp(MDApp):
                 self.root.current = target_screen
                 
             # Update specific screen data if needed
-            if new_state == "printing" and "progress" in data:
-                # TODO: Update StatusScreen progress bar
-                pass
+            if new_state == "printing" or new_state == "uploading":
+                screen = self.root.get_screen(target_screen)
+                if hasattr(screen, 'update_status') and "status" in data:
+                     screen.update_status(data["status"])
         except Exception as e:
             print(f"Error in handle_status_update: {e}")
 

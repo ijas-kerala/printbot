@@ -42,8 +42,9 @@ async def process_settings(
         raise HTTPException(status_code=404, detail="Job not found")
         
     # Logic to parse page range and count actual pages
-    # For now, simplistic estimation
-    actual_pages = job.total_pages # Replace with range parsing logic later
+    from core.printing.page_utils import parse_page_range
+    pages_list = parse_page_range(page_range, job.page_count) # job.page_count (from upload) not total_pages (might be wrong attr name)
+    actual_pages = len(pages_list)
     
     is_duplex_bool = True if duplex == 'on' else False
     

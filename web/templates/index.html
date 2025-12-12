@@ -7,8 +7,8 @@
         <p class="text-gray-600">PDF, JPG, PNG supported</p>
     </div>
 
-    <form hx-encoding="multipart/form-data" hx-post="/upload" hx-target="#main-content" hx-swap="innerHTML"
-        class="w-full space-y-4">
+    <form hx-encoding="multipart/form-data" hx-post="/upload" hx-target="#main-content" hx-select="#main-content"
+        hx-swap="innerHTML" class="w-full space-y-4">
 
         <label
             class="flex flex-col items-center justify-center w-full h-48 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition">
@@ -35,6 +35,10 @@
         </button>
     </form>
 
-    <div id="error-message" class="text-red-500 text-sm mt-2"></div>
+    <div id="error-message" class="text-red-500 text-sm mt-2">
+        {% if error %}
+        {{ error }}
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

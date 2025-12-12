@@ -88,4 +88,24 @@ class ConnectScreen(MDScreen):
         # TODO: Implement pattern lock overlay
 
 class StatusScreen(MDScreen):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = MDBoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        # Mascot
+        self.mascot = MascotWidget(size_hint=(1, 0.5), state="happy")
+        self.layout.add_widget(self.mascot)
+        
+        # Status Text
+        self.status_label = MDLabel(
+            text="Initializing Printer...",
+            halign="center",
+            font_style="H4",
+            theme_text_color="Primary"
+        )
+        self.layout.add_widget(self.status_label)
+        
+        self.add_widget(self.layout)
+
+    def update_status(self, text):
+        self.status_label.text = text

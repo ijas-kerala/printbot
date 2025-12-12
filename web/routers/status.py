@@ -20,6 +20,9 @@ def get_machine_status(db: Session = Depends(get_db)):
         elif latest_job.status == "payment_pending":
             status_text = "Waiting for Payment"
             state_code = "uploading"
+        elif latest_job.status == "uploaded":
+            status_text = "File Uploaded. configuring..."
+            state_code = "uploading"
         elif latest_job.status == "paid":
              status_text = "Processing Job..."
              state_code = "printing"

@@ -111,36 +111,33 @@ class PrinterService:
         if not range_str or not range_str.strip():
             return file_path
 
-        from pypdf import PdfReader, PdfWriter
         from core.printing.page_utils import parse_page_range
         
         try:
-            reader = PdfReader(file_path)
-            total_pages = len(reader.pages)
+            doc = fitz.open(file_path)
+            total_pages = doc.page_count
             pages_to_keep = parse_page_range(range_str, total_pages)
             
             # If requesting all pages, just return original
             if len(pages_to_keep) == total_pages:
-                # Check if it's actually sequential 0..N-1
+                 # Check if it's actually sequential 0..N-1
                 if pages_to_keep == list(range(total_pages)):
+                    doc.close()
                     return file_path
             
             output_filename = f"{os.path.splitext(file_path)[0]}_sliced.pdf"
-            writer = PdfWriter()
             
-            for p_idx in pages_to_keep:
-                writer.add_page(reader.pages[p_idx])
-                
-            with open(output_filename, "wb") as f:
-                writer.write(f)
+            # Select only the pages we want (destructive operation on this object)
+            doc.select(pages_to_keep)
+            doc.save(output_filename)
+            doc.close()
                 
             print(f"Created sliced PDF: {output_filename} with pages {pages_to_keep}")
             return output_filename
             
         except Exception as e:
             print(f"Error applying page range: {e}")
-            # Fallback to printing whole document? Or fail safely?
-            # Requirement: "Zero exceptions" - better to fail than print wrong pages.
+            # Fallback to failing safely rather than printing wrong pages
             raise e
 
 printer_service = PrinterService()
