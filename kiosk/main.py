@@ -66,7 +66,8 @@ class PrintJoyApp(MDApp):
         """
         try:
             # In production, this URL should be configurable or discovered
-            response = requests.get("http://127.0.0.1:8000/status", timeout=1)
+            api_url = os.environ.get("API_URL", "http://127.0.0.1:8000")
+            response = requests.get(f"{api_url}/status", timeout=1)
             if response.status_code == 200:
                 data = response.json()
                 self.handle_status_update(data)

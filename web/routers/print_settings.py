@@ -58,11 +58,29 @@ async def process_settings(
     amount = total_sheets * config_settings.PRICE_PER_PAGE
     
     # Create Razorpay Order/Link
-    # In a real app, use the Razorpay client to create a link
-    # For demo, we mock or use the service if configured
+    order_id = f"order_{uuid.uuid4().hex[:8]}" # Default internal ID
+    payment_link_url = None
+    qr_code_b64 = None
     
-    # Generate a unique order ID for internal tracking
-    order_id = f"order_{uuid.uuid4().hex[:8]}"
+    if razorpay_service.enabled:
+        try:
+            link_data = razorpay_service.create_payment_link(
+                amount=amount,
+                description=f"Print Job {file_id}",
+                reference_id=order_id
+            )
+            if link_data:
+                payment_link_url = link_data.get('short_url')
+                order_id = link_data.get('payment_link_id', order_id) # Use RP ID if available? Or store both?
+                # Actually, our DB expects razorpay_order_id to be the link ID for webhooks to work
+                # But RP link IDs look like 'plink_...' 
+                # Let's use the one RP gives us.
+                order_id = link_data.get('payment_link_id')
+                qr_code_b64 = link_data.get('qr_code_base64')
+        except Exception as e:
+            print(f"Razorpay Gen Error: {e}")
+            # Fallback to mock logic below if RP fails
+            pass
     
     # Update Job
     job.copies = copies
@@ -74,26 +92,34 @@ async def process_settings(
     db.commit()
     
     # Redirect to payment page
-    return RedirectResponse(url=f"/payment/{order_id}", status_code=303)
+    import urllib.parse
+    redirect_url = f"/payment/{order_id}"
+    if payment_link_url:
+        encoded_link = urllib.parse.quote(payment_link_url)
+        redirect_url += f"?payment_link={encoded_link}"
+    
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 @router.get("/payment/{order_id}", response_class=HTMLResponse)
-async def payment_page(request: Request, order_id: str, db: Session = Depends(get_db)):
+async def payment_page(request: Request, order_id: str, payment_link: str = None, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.razorpay_order_id == order_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Order not found")
         
     # Generate Razorpay Link if not already (or use static QR logic)
-    # Here we assume we generate a link or just show the amount
+    # If passed in query param, use it (Real Razorpay or Mock Service)
+    final_link = payment_link
     
-    # MOCK Payment Link for demo/dev
-    payment_link = f"upi://pay?pa=test@upi&pn=PrintBot&am={job.total_cost}&tn=PrintOrder"
+    if not final_link:
+        # Fallback (Old Mock Logic)
+        final_link = f"upi://pay?pa=test@upi&pn=PrintBot&am={job.total_cost}&tn=PrintOrder"
     
     return templates.TemplateResponse("payment.html", {
         "request": request,
         "amount": job.total_cost,
-        "payment_link": payment_link,
+        "payment_link": final_link,
         "order_id": order_id,
-        "qr_url": None # or generate SVG
+        "qr_url": None # Template handles generating QR from 'payment_link' via JS
     })
 
 @router.get("/payment-status/{order_id}")
