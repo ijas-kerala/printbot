@@ -7,14 +7,25 @@ from core.config import settings
 class RazorpayService:
     def __init__(self):
         self.enabled = False
-        if settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET and settings.RAZORPAY_KEY_ID != "your_key_id_here":
-            try:
-                self.client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-                self.enabled = True
-            except Exception as e:
-                print(f"Razorpay Client Init Failed: {e}")
+        
+        # Verbose Logging for Debugging
+        print("--- Payment Service Init ---")
+        print(f"Key ID Present: {bool(settings.RAZORPAY_KEY_ID)}")
+        print(f"Key Secret Present: {bool(settings.RAZORPAY_KEY_SECRET)}")
+        
+        if settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET:
+            if settings.RAZORPAY_KEY_ID == "your_key_id_here":
+                 print("⚠ Razorpay Keys are default placeholders. Using MOCK mode.")
+            else:
+                try:
+                    self.client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                    # verify credentials by making a lightweight call or just assuming success for now
+                    self.enabled = True
+                    print("✅ Razorpay Service Initialized in REAL mode.")
+                except Exception as e:
+                    print(f"❌ Razorpay Client Init Failed: {e}")
         else:
-            print("⚠ Razorpay Keys missing or default. Payment Service running in MOCK mode.")
+            print("⚠ Razorpay Keys missing in settings. Payment Service running in MOCK mode.")
 
     def create_payment_link(self, amount: float, description: str, reference_id: str, customer_email: str = "guest@printbot.local", customer_contact: str = "9999999999"):
         """

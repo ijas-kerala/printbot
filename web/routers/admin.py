@@ -9,9 +9,13 @@ from core.config import settings
 import datetime
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-templates = Jinja2Templates(directory="app/templates")
+templates = Jinja2Templates(directory="web/templates")
 
-# Pattern Check (Mock: '1475369' is Z shape on 3x3 grid: 1-2-3-5-7-8-9? No standard Z is 1-2-3-5-7-8-9 or 1-2-3-6-9-8-7-4-1? 
+templates = Jinja2Templates(directory="web/templates")
+
+@router.get("/", include_in_schema=False)
+def admin_root_redirect():
+    return RedirectResponse(url="/admin/login") 
 # "Z" shape: 1->2->3 -> 5 -> 7->8->9 
 # Wait, standard keypad:
 # 1 2 3
