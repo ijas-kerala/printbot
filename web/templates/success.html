@@ -1,47 +1,93 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card bg-base-100 shadow-xl border-4 border-success">
-    <div class="card-body items-center text-center">
-        <!-- Success Mascot -->
-        <div class="avatar mb-4">
-            <div class="w-32 rounded-full bg-success/20 p-4">
-                <img src="/static/printo_happy.png" alt="Happy Printo" />
-            </div>
+<div class="w-full text-center flex flex-col items-center justify-center animate-in zoom-in duration-700">
+
+    <!-- Happy Printo Container -->
+    <div class="mb-4 relative group cursor-pointer" onclick="fireNow()">
+        <!-- Glow effect -->
+        <div class="absolute inset-0 bg-joy-yellow rounded-full filter blur-xl opacity-50 animate-pulse"></div>
+
+        <div class="w-48 h-48 relative z-10 transition-transform hover:scale-110 active:scale-90 duration-200">
+            <img src="/static/printo_happy.png" alt="Happy Printo"
+                class="w-full h-full object-contain animate-[bounce_2s_infinite]" />
         </div>
 
-        <h2 class="card-title text-3xl font-black text-success mb-2">Yay! Payment Connection!</h2>
-        <p class="text-lg mb-6">Your file is being printed now.</p>
-
-        <a href="/" class="btn btn-primary btn-wide shadow-lg">
-            Print Another File
-        </a>
+        <!-- Party icon decorations -->
+        <div class="absolute -top-2 -right-2 text-4xl animate-bounce" style="animation-delay: 0.2s">✨</div>
+        <div class="absolute -bottom-2 -left-2 text-4xl animate-bounce" style="animation-delay: 0.5s">🎉</div>
     </div>
+
+    <div class="card w-full glass-panel shadow-xl rounded-3xl overflow-hidden mb-6 border-t-8 border-t-brand-400">
+        <div class="card-body p-8 items-center text-center">
+
+            <h2
+                class="text-3xl font-heading font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-brand-700 mb-2">
+                Printing Started!</h2>
+            <p class="text-slate-500 font-medium text-lg leading-relaxed">
+                Yay! Payment received.<br>
+                Collect your pages from the tray below.
+            </p>
+
+            <div class="divider my-4"></div>
+
+            <p class="text-sm text-slate-400">Thanks for using PrintJoy!</p>
+
+        </div>
+    </div>
+
+    <!-- Action Button -->
+    <a href="/"
+        class="btn btn-primary btn-lg rounded-full px-8 shadow-xl shadow-brand-500/20 hover:shadow-brand-500/40 hover:-translate-y-1 transition-all">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+            class="w-6 h-6 mr-2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Print Another File
+    </a>
+
 </div>
 
 <!-- Confetti Script -->
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
-    // Launch confetti
-    var duration = 3 * 1000;
-    var animationEnd = Date.now() + duration;
-    var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+    function fireNow() {
+        var count = 200;
+        var defaults = {
+            origin: { y: 0.7 }
+        };
 
-    function random(min, max) {
-        return Math.random() * (max - min) + min;
-    }
-
-    var interval = setInterval(function () {
-        var timeLeft = animationEnd - Date.now();
-
-        if (timeLeft <= 0) {
-            return clearInterval(interval);
+        function fire(particleRatio, opts) {
+            confetti(Object.assign({}, defaults, opts, {
+                particleCount: Math.floor(count * particleRatio)
+            }));
         }
 
-        var particleCount = 50 * (timeLeft / duration);
-        // since particles fall down, start a bit higher than random
-        confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.1, 0.3), y: Math.random() - 0.2 } }));
-        confetti(Object.assign({}, defaults, { particleCount, origin: { x: random(0.7, 0.9), y: Math.random() - 0.2 } }));
-    }, 250);
+        fire(0.25, {
+            spread: 26,
+            startVelocity: 55,
+        });
+        fire(0.2, {
+            spread: 60,
+        });
+        fire(0.35, {
+            spread: 100,
+            decay: 0.91,
+            scalar: 0.8
+        });
+        fire(0.1, {
+            spread: 120,
+            startVelocity: 25,
+            decay: 0.92,
+            scalar: 1.2
+        });
+        fire(0.1, {
+            spread: 120,
+            startVelocity: 45,
+        });
+    }
+
+    // Fire on load
+    setTimeout(fireNow, 300);
 </script>
 {% endblock %}

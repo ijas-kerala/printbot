@@ -1,165 +1,70 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card bg-base-100 shadow-xl border-4 border-indigo-500 w-full max-w-sm">
-    <div class="card-body items-center text-center">
-        <h2 class="card-title text-2xl text-indigo-600 mb-4">Admin Access</h2>
+<div class="w-full flex flex-col items-center justify-center animate-in zoom-in duration-500">
 
-        <!-- Tabs -->
-        <div role="tablist" class="tabs tabs-boxed mb-4">
-            <a role="tab" class="tab tab-active" onclick="switchTab('pattern')">Pattern</a>
-            <a role="tab" class="tab" onclick="switchTab('pin')">PIN</a>
+    <!-- Lock Icon / Mascot -->
+    <div class="mb-6 relative">
+        <div
+            class="w-20 h-20 bg-white shadow-xl rounded-full flex items-center justify-center text-brand-500 z-10 relative">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                stroke="currentColor" class="w-10 h-10">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
         </div>
-
-        <!-- Pattern Lock Section -->
-        <div id="pattern-section" class="w-full flex flex-col items-center">
-            <p class="text-xs text-base-content/60 mb-2">Draw 'Z' Pattern to Unlock</p>
-            <canvas id="patternLock" width="250" height="250" class="bg-base-200 rounded-xl touch-none"></canvas>
-            <form id="patternForm" action="/admin/login/pattern" method="post" class="hidden">
-                <input type="hidden" name="pattern" id="patternInput">
-            </form>
-        </div>
-
-        <!-- PIN Section -->
-        <form id="pin-section" action="/admin/login" method="post" class="hidden w-full">
-            <div class="form-control w-full">
-                <input type="text" name="username" placeholder="Username" class="input input-bordered mb-2"
-                    value="admin" readonly />
-                <input type="password" name="password" placeholder="PIN / Password" class="input input-bordered" />
-            </div>
-            <button type="submit" class="btn btn-primary btn-block mt-4">Unlock</button>
-        </form>
-
-        {% if error %}
-        <div class="alert alert-error mt-4 p-2 text-sm">
-            {{ error }}
-        </div>
-        {% endif %}
+        <div class="absolute inset-0 bg-brand-200 rounded-full animate-ping opacity-50 z-0"></div>
     </div>
+
+    <!-- Error Alert -->
+    {% if request.query_params.get('error') %}
+    <div role="alert" class="alert alert-error shadow-lg w-full max-w-sm rounded-xl mb-6 flex animate-bounce-slight">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="font-bold text-sm">{{ request.query_params.get('error') }}</span>
+    </div>
+    {% endif %}
+
+    <div
+        class="card w-full max-w-sm glass-panel shadow-2xl rounded-3xl overflow-hidden relative border border-white/60">
+        <div class="card-body p-8 text-center">
+
+            <h2 class="text-2xl font-heading font-black text-slate-700 mb-2">Admin Access</h2>
+            <p class="text-slate-500 text-sm mb-6">Enter PIN or Pattern to unlock.</p>
+
+            <!-- PIN Form -->
+            <form action="/admin/login" method="post" class="space-y-4">
+                <div class="form-control">
+                    <input type="password" name="password" placeholder="Enter 4-Digit PIN"
+                        class="input input-lg w-full text-center tracking-[1em] font-heading font-bold text-slate-800 bg-white/70 focus:bg-white border-2 border-slate-200 focus:border-brand-500 rounded-xl"
+                        maxlength="4" pattern="[0-9]*" inputmode="numeric" required autofocus />
+                </div>
+
+                <button type="submit"
+                    class="btn btn-primary btn-lg w-full rounded-xl font-bold shadow-lg shadow-brand-500/30">
+                    Unlock Dashboard
+                </button>
+            </form>
+
+            <div class="divider text-xs text-slate-300 font-bold my-6">OR</div>
+
+            <!-- Pattern Form Mockup (Hidden actual implementation details for now, simpler UI focus) -->
+            <button class="btn btn-ghost btn-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600 w-full"
+                onclick="alert('Pattern unlock feature coming soon! Use PIN: 1234')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" class="w-4 h-4 mr-2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+                Use Pattern
+            </button>
+
+        </div>
+    </div>
+
+    <p class="mt-8 text-xs text-slate-400 font-medium">Restricted Area • Authorized Personnel Only</p>
+
 </div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-pattern-lock/1.0.0/pattern-lock.min.js"></script>
-<script>
-    // Simple mock pattern lock logic if library fails, but we'll try to impl simple canvas logic
-    const canvas = document.getElementById('patternLock');
-    const ctx = canvas.getContext('2d');
-    let isDrawing = false;
-    let points = [];
-    const nodes = [
-        { x: 50, y: 50, id: 1 }, { x: 125, y: 50, id: 2 }, { x: 200, y: 50, id: 3 },
-        { x: 50, y: 125, id: 4 }, { x: 125, y: 125, id: 5 }, { x: 200, y: 125, id: 6 },
-        { x: 50, y: 200, id: 7 }, { x: 125, y: 200, id: 8 }, { x: 200, y: 200, id: 9 }
-    ];
-    let path = [];
-
-    function drawGrid() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw path
-        if (points.length > 0) {
-            ctx.beginPath();
-            ctx.strokeStyle = '#6366f1'; // Indigo
-            ctx.lineWidth = 5;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.moveTo(points[0].x, points[0].y);
-            for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i].x, points[i].y);
-            }
-            if (isDrawing && currentPos) {
-                ctx.lineTo(currentPos.x, currentPos.y);
-            }
-            ctx.stroke();
-        }
-
-        // Draw nodes
-        nodes.forEach(node => {
-            const isActive = path.includes(node.id);
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, 10, 0, Math.PI * 2);
-            ctx.fillStyle = isActive ? '#6366f1' : '#cbd5e1';
-            ctx.fill();
-        });
-    }
-
-    let currentPos = null;
-
-    function getTouchPos(e) {
-        const rect = canvas.getBoundingClientRect();
-        const touch = e.touches ? e.touches[0] : e;
-        return {
-            x: touch.clientX - rect.left,
-            y: touch.clientY - rect.top
-        };
-    }
-
-    function checkNode(pos) {
-        nodes.forEach(node => {
-            const dx = pos.x - node.x;
-            const dy = pos.y - node.y;
-            if (dx * dx + dy * dy < 900) { // 30px radius squared
-                if (!path.includes(node.id)) {
-                    path.push(node.id);
-                    points.push({ x: node.x, y: node.y });
-                    // Vibration feedback
-                    if (navigator.vibrate) navigator.vibrate(20);
-                }
-            }
-        });
-    }
-
-    function start(e) {
-        e.preventDefault();
-        isDrawing = true;
-        path = [];
-        points = [];
-        const pos = getTouchPos(e);
-        checkNode(pos);
-        drawGrid();
-    }
-
-    function move(e) {
-        if (!isDrawing) return;
-        e.preventDefault();
-        currentPos = getTouchPos(e);
-        checkNode(currentPos);
-        drawGrid();
-    }
-
-    function end(e) {
-        if (!isDrawing) return;
-        isDrawing = false;
-        currentPos = null;
-        drawGrid();
-
-        if (path.length > 0) {
-            document.getElementById('patternInput').value = path.join('');
-            document.getElementById('patternForm').submit();
-        }
-    }
-
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', end);
-
-    canvas.addEventListener('touchstart', start, { passive: false });
-    canvas.addEventListener('touchmove', move, { passive: false });
-    canvas.addEventListener('touchend', end);
-
-    drawGrid();
-
-    function switchTab(tab) {
-        const tabs = document.querySelectorAll('.tab');
-        tabs.forEach(t => t.classList.remove('tab-active'));
-        event.target.classList.add('tab-active');
-
-        if (tab === 'pattern') {
-            document.getElementById('pattern-section').classList.remove('hidden');
-            document.getElementById('pin-section').classList.add('hidden');
-        } else {
-            document.getElementById('pattern-section').classList.add('hidden');
-            document.getElementById('pin-section').classList.remove('hidden');
-        }
-    }
-</script>
 {% endblock %}

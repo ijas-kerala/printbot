@@ -1,50 +1,91 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card bg-base-100 shadow-xl border-4 border-base-300">
-    <div class="card-body items-center text-center">
-        <!-- Printo Spinning Animation -->
-        <div class="avatar mb-2">
-            <div class="w-20 rounded-full bg-white p-2 animate-bounce">
-                <img src="/static/printo_idle.png" alt="Printo" />
-            </div>
+<div class="w-full h-full flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500">
+
+    <!-- Printo Floating Head -->
+    <div class="mb-4 relative">
+        <div class="w-24 h-24 bg-white/80 backdrop-blur rounded-full shadow-lg p-3 animate-bounce-slight z-10 relative">
+            <img src="/static/printo_idle.png" alt="Printo" class="w-full h-full object-contain" />
         </div>
-
-        <h2 class="card-title text-xl mb-4">Waiting for Payment...</h2>
-
-        <!-- QR Code Display -->
-        <div class="bg-white p-4 rounded-xl shadow-inner mb-4">
-            <!-- If we have a direct SVG/IMG from Razorpay -->
-            {% if qr_url %}
-            <img src="{{ qr_url }}" class="w-48 h-48 mx-auto" alt="Payment QR Code" />
-            {% else %}
-            <!-- Fallback if we just have a link (generate local QR) -->
-            <div id="local-qr"></div>
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-            <script>
-                new QRCode(document.getElementById("local-qr"), {
-                    text: "{{ payment_link }}",
-                    width: 192,
-                    height: 192
-                });
-            </script>
-            {% endif %}
-        </div>
-
-        <p class="text-2xl font-black text-primary mb-2">₹{{ amount }}</p>
-        <p class="text-sm text-base-content/60">Scan with any UPI App<br>(GPay, Paytm, PhonePe)</p>
-
-        <!-- Manual Link Button -->
-        <a href="{{ payment_link }}" target="_blank" class="btn btn-outline btn-sm mt-4">
-            Open Payment App
-        </a>
-
-        <!-- HTMX Polling for Status -->
-        <!-- Trigger every 3s, target body to replace with success page if redirected or update specific div -->
-        <div hx-get="/payment-status/{{ order_id }}" hx-trigger="every 3s" hx-swap="none" class="hidden">
-            <!-- The backend should return HX-Redirect header on success -->
-        </div>
-
+        <!-- Pulse ring behind Printo -->
+        <div class="absolute inset-0 rounded-full bg-brand-200 animate-ping opacity-75 z-0"></div>
     </div>
+
+    <div class="text-center mb-6">
+        <h2 class="text-2xl font-heading font-bold text-slate-700">Waiting for Payment</h2>
+        <p class="text-brand-600 font-medium animate-pulse">Checking status...</p>
+    </div>
+
+    <!-- Main Payment Card -->
+    <div class="card w-full glass-panel shadow-2xl rounded-3xl overflow-hidden relative">
+        <div class="bg-gradient-to-r from-brand-500 to-brand-600 p-4 text-center">
+            <p class="text-brand-100 text-sm uppercase tracking-wider font-bold">Total Amount</p>
+            <p class="text-4xl font-heading font-bold text-white">₹{{ amount }}</p>
+        </div>
+
+        <div class="card-body p-6 items-center text-center bg-white/50">
+
+            <!-- QR Code Container -->
+            <div class="relative bg-white p-4 rounded-2xl shadow-inner border border-slate-100 mx-auto mb-4 group">
+                <!-- Corner Indicators -->
+                <div
+                    class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-500 rounded-tl-xl -mt-1 -ml-1">
+                </div>
+                <div
+                    class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-500 rounded-tr-xl -mt-1 -mr-1">
+                </div>
+                <div
+                    class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-500 rounded-bl-xl -mb-1 -ml-1">
+                </div>
+                <div
+                    class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-500 rounded-br-xl -mb-1 -mr-1">
+                </div>
+
+                {% if qr_url %}
+                <img src="{{ qr_url }}" class="w-56 h-56 object-contain mx-auto" alt="Payment QR Code" />
+                {% else %}
+                <div id="local-qr"></div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+                <script>
+                    new QRCode(document.getElementById("local-qr"), {
+                        text: "{{ payment_link }}",
+                        width: 224,
+                        height: 224
+                    });
+                </script>
+                {% endif %}
+
+                <!-- Scan Overlay Text -->
+                <div class="absolute bottom-2 left-0 right-0 text-center">
+                    <span
+                        class="bg-white/90 px-2 py-1 rounded text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scan
+                        Me</span>
+                </div>
+            </div>
+
+            <p class="text-slate-500 text-sm font-medium mb-4">
+                Scan with any UPI App<br>
+                <span class="text-xs text-slate-400">(GPay, Paytm, PhonePe, BHIM)</span>
+            </p>
+
+            <!-- Manual Link Button -->
+            <a href="{{ payment_link }}" target="_blank"
+                class="btn btn-outline btn-brand-500 btn-sm rounded-full px-6 hover:scale-105 transition-transform">
+                Open Payment App
+            </a>
+
+            <!-- HTMX Polling -->
+            <div hx-get="/payment-status/{{ order_id }}" hx-trigger="every 3s" hx-swap="none" class="hidden">
+            </div>
+
+        </div>
+
+        <!-- Bottom Progress Bar -->
+        <div class="absolute bottom-0 left-0 w-full h-1 bg-brand-100">
+            <div class="h-full bg-brand-400 w-full origin-left animate-[scale-x_3s_ease-in-out_infinite]"></div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
