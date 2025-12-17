@@ -120,4 +120,31 @@ class RazorpayService:
             print(f"Error fetching payment link: {e}")
             return None
 
+    def verify_webhook_signature(self, body_bytes: bytes, signature: str):
+        """
+        Verifies the webhook signature using the Razorpay client utility.
+        """
+        if not self.enabled:
+            # In Mock mode, we can't verify signatures from real Razorpay
+            # But if we were simulating, we'd just return True
+            return True
+
+        try:
+            # Razorpay SDK expects the body as a string for verification in some versions, 
+            # but usually bytes/string is handled. The SDK method is:
+            # client.utility.verify_webhook_signature(body, signature, secret)
+            
+            # Note: Razorpay python client requires the body to be exactly as received.
+            # We decoded it to log or process, but for verification we need the raw bytes (decoded to str usually)
+            
+            self.client.utility.verify_webhook_signature(
+                body_bytes.decode('utf-8'), 
+                signature, 
+                settings.RAZORPAY_WEBHOOK_SECRET
+            )
+            return True
+        except Exception as e:
+            print(f"❌ Webhook Signature Verification Failed: {e}")
+            return False
+
 razorpay_service = RazorpayService()

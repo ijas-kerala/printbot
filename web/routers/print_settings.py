@@ -71,7 +71,7 @@ async def process_settings(
             )
             if link_data:
                 payment_link_url = link_data.get('short_url')
-                order_id = link_data.get('payment_link_id', order_id) # Use RP ID if available? Or store both?
+                # order_id = link_data.get('payment_link_id', order_id) # Use RP ID if available? Or store both?
                 # Actually, our DB expects razorpay_order_id to be the link ID for webhooks to work
                 # But RP link IDs look like 'plink_...' 
                 # Let's use the one RP gives us.
@@ -79,8 +79,8 @@ async def process_settings(
                 qr_code_b64 = link_data.get('qr_code_base64')
         except Exception as e:
             print(f"Razorpay Gen Error: {e}")
-            # Fallback to mock logic below if RP fails
-            pass
+            # CRITICAL: Do not swallow error. Show it to user for debugging.
+            raise HTTPException(status_code=500, detail=f"Payment Link Generation Failed: {str(e)}")
     
     # Update Job
     job.copies = copies
@@ -104,6 +104,10 @@ async def process_settings(
 async def payment_page(request: Request, order_id: str, payment_link: str = None, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.razorpay_order_id == order_id).first()
     if not job:
+         # If order ID changed because we used internal ID but DB has RP ID, we might miss it.
+         # But usually we redirect to the correct ID.
+         # Let's try to find by internal ID if not found? 
+         # checks job.id? No, order_id is distinct.
         raise HTTPException(status_code=404, detail="Order not found")
         
     # Generate Razorpay Link if not already (or use static QR logic)
@@ -111,8 +115,9 @@ async def payment_page(request: Request, order_id: str, payment_link: str = None
     final_link = payment_link
     
     if not final_link:
-        # Fallback (Old Mock Logic)
-        final_link = f"upi://pay?pa=test@upi&pn=PrintBot&am={job.total_cost}&tn=PrintOrder"
+        # Fallback (Old Mock Logic) - DISABLED FOR DEBUGGING
+        # final_link = f"upi://pay?pa=test@upi&pn=PrintBot&am={job.total_cost}&tn=PrintOrder"
+        raise HTTPException(status_code=500, detail="Payment Link missing. creation must have failed.")
     
     return templates.TemplateResponse("payment.html", {
         "request": request,
