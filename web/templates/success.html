@@ -21,13 +21,47 @@
     <div class="card w-full glass-panel shadow-xl rounded-3xl overflow-hidden mb-6 border-t-8 border-t-brand-400">
         <div class="card-body p-8 items-center text-center">
 
-            <h2
+            <h2 id="status-title"
                 class="text-3xl font-heading font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-brand-700 mb-2">
                 Printing Started!</h2>
-            <p class="text-slate-500 font-medium text-lg leading-relaxed">
+            <p id="status-message" data-job-id="{{ job_id }}"
+                class="text-slate-500 font-medium text-lg leading-relaxed">
                 Yay! Payment received.<br>
-                Collect your pages from the tray below.
+                Initializing print job...
             </p>
+
+            {% if job_id %}
+            <script>
+                (function () {
+                    const msgEl = document.getElementById('status-message');
+                    const titleEl = document.getElementById('status-title');
+                    const jobId = msgEl.getAttribute('data-job-id');
+
+                    function checkStatus() {
+                        fetch(`/jobs/${jobId}/status`)
+                            .then(r => r.json())
+                            .then(data => {
+                                msgEl.innerText = data.text;
+                                if (data.status === 'completed') {
+                                    titleEl.innerText = "All Done!";
+                                    msgEl.innerHTML = "Your document is ready.<br>Please collect it from the tray.";
+                                    // Stop polling
+                                } else if (data.status === 'failed') {
+                                    titleEl.innerText = "Oops!";
+                                    // Stop polling
+                                } else {
+                                    // Continue polling
+                                    setTimeout(checkStatus, 2000);
+                                }
+                            })
+                            .catch(e => console.error("Status Poll Error:", e));
+                    }
+
+                    // Start polling after 1s
+                    setTimeout(checkStatus, 1000);
+                })();
+            </script>
+            {% endif %}
 
             <div class="divider my-4"></div>
 

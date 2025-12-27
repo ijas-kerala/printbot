@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     RAZORPAY_WEBHOOK_SECRET: str = ""
     
     PRINTER_NAME: str = "Canon_LBP122dw"
+    MOCK_PRINTER: bool = False
     PRICE_PER_PAGE: float = 5.0
     
     CLOUDFLARE_TUNNEL_TOKEN: str = ""

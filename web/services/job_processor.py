@@ -21,7 +21,7 @@ class JobProcessor:
         finally:
             db.close()
 
-    def process_single_job(self, job_id: int):
+    def process_single_job(self, job_id: str):
         """
         Process a specific job with robust error handling and retries.
         """

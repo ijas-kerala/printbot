@@ -54,7 +54,7 @@ class PrinterService:
             print(f"Conversion failed: {e}")
             return None
 
-    def print_job(self, file_path: str, job_id: int, copies: int = 1, is_duplex: bool = False, page_range: str = None):
+    def print_job(self, file_path: str, job_id: str, copies: int = 1, is_duplex: bool = False, page_range: str = None):
         """
         Sends the PDF to CUPS (or Mocks it).
         """
@@ -87,6 +87,17 @@ class PrinterService:
 
         try:
             # Check if printer exists
+            if not self.conn:
+                # Try to reconnect
+                try:
+                    self.conn = cups.Connection()
+                    print("🔄 Reconnected to CUPS service.")
+                except:
+                   pass
+            
+            if not self.conn:
+                raise Exception("Could not connect to CUPS service (Is cupsd running?)")
+
             printers = self.conn.getPrinters()
             printer_target = self.printer_name
             

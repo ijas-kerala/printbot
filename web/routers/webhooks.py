@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Header, HTTPException, Depends
+from fastapi import APIRouter, Request, Header, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from core.database import get_db
 from web.models.models import Job
@@ -10,6 +10,7 @@ router = APIRouter(prefix="/webhooks", tags=["payment"])
 @router.post("/razorpay")
 async def razorpay_webhook(
     request: Request, 
+    background_tasks: BackgroundTasks,
     x_razorpay_signature: str = Header(None),
     db: Session = Depends(get_db)
 ):
@@ -22,7 +23,10 @@ async def razorpay_webhook(
     body_bytes = await request.body()
     
     # Verify Signature
-    if not razorpay_service.verify_webhook_signature(body_bytes, x_razorpay_signature):
+    is_verified = razorpay_service.verify_webhook_signature(body_bytes, x_razorpay_signature)
+    print(f"Webhook Signature Verification: {is_verified} | Signature: {x_razorpay_signature[:10]}...")
+    
+    if not is_verified:
         # Optional: In dev/mock mode, we might skip signature checks if we want to test manually
         # But generally, we should fail.
         if razorpay_service.enabled:
@@ -44,6 +48,10 @@ async def razorpay_webhook(
                 # job.razorpay_payment_id = payment_id 
                 db.commit()
                 print(f"Webhook: Job {job.id} marked as PAID via Link {pl_id}")
+                
+                # Trigger Processing Immediately
+                from web.services.job_processor import job_processor
+                background_tasks.add_task(job_processor.process_single_job, job.id)
                 
         elif event == 'order.paid':
              # If using Orders API instead of Payment Links

@@ -27,7 +27,7 @@ class RazorpayService:
         else:
             print("⚠ Razorpay Keys missing in settings. Payment Service running in MOCK mode.")
 
-    def create_payment_link(self, amount: float, description: str, reference_id: str, customer_email: str = "guest@printbot.local", customer_contact: str = "9999999999"):
+    def create_payment_link(self, amount: float, description: str, reference_id: str, customer_email: str = "guest@printbot.local", customer_contact: str = None):
         """
         Creates a Razorpay Payment Link and returns the short URL and a base64 QR code.
         If disabled, returns a MOCK link.
@@ -59,17 +59,21 @@ class RazorpayService:
         # REAL MODE
         amount_paise = int(amount * 100)
         
+        customer_data = {
+            "name": "PrintBot User",
+            "email": customer_email
+        }
+        
+        if customer_contact:
+            customer_data["contact"] = customer_contact
+        
         data = {
             "amount": amount_paise,
             "currency": settings.RAZORPAY_CURRENCY,
             "accept_partial": False,
             "description": description,
             "reference_id": reference_id,
-            "customer": {
-                "name": "PrintBot User",
-                "email": customer_email,
-                "contact": customer_contact
-            },
+            "customer": customer_data,
             "notify": {
                 "sms": False,
                 "email": False
@@ -111,7 +115,7 @@ class RazorpayService:
             
         except Exception as e:
             print(f"Error creating Razorpay link: {e}")
-            return None
+            raise e
 
     def fetch_payment_link_status(self, payment_link_id: str):
         try:

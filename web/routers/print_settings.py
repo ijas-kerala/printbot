@@ -132,16 +132,90 @@ async def check_payment_status(order_id: str, db: Session = Depends(get_db)):
     # This endpoint is polled by HTMX
     job = db.query(Job).filter(Job.razorpay_order_id == order_id).first()
     
-    if job and job.status == "paid":
+    if job:
+        # print(f"Polling Status for {order_id}: {job.status}") # Verbose logging
+        pass
+        
+    if job and job.status in ["paid", "processing", "printing", "completed"]:
+        print(f"Redirecting {order_id} -> Success (Status: {job.status})")
         # HTMX Redirect
         response = HTMLResponse()
-        response.headers["HX-Redirect"] = "/success"
+        # Redirect to success page with job_id for tracking
+        response.headers["HX-Redirect"] = f"/success?job_id={job.id}"
         return response
         
     # If using test mode, auto-approve payment after a few seconds?
     # For now, return nothing (keep polling)
+    
+    # [FIX] Active Status Check: If still pending, ask Razorpay directly
+    # This prevents hanging if the webhook failed or is delayed.
+    if job and job.status == "payment_pending" and razorpay_service.enabled:
+        try:
+            # print(f"Actively checking Razorpay status for {order_id}...")
+            # order_id here corresponds to the payment_link_id in Razorpay
+            pl_details = razorpay_service.fetch_payment_link_status(order_id)
+            
+            if pl_details and pl_details.get('status') == 'paid':
+                print(f"✅ Active Check: Payment PAID for {order_id}")
+                
+                # Update Job
+                job.status = "paid"
+                db.commit()
+                
+                # Trigger Processing Immediately (Same as Webhook)
+                from web.services.job_processor import job_processor
+                # We need background tasks but we are in a GET request without BackgroundTasks param easily accessible 
+                # directly in this signature context without changing it? 
+                # Actually, we can just run it synchronously here since it's a lightweight trigger 
+                # OR better: just let the next poll pick it up? 
+                # No, we want to return success NOW.
+                
+                # Let's try to offload if possible, but synchronous trigger of 'process_single_job' 
+                # which puts it in queue is fine.
+                try:
+                    job_processor.process_single_job(job.id)
+                except Exception as e:
+                    print(f"Trigger Error: {e}")
+                
+                # Return Success Redirect
+                response = HTMLResponse()
+                response.headers["HX-Redirect"] = f"/success?job_id={job.id}"
+                return response
+                
+        except Exception as e:
+            print(f"Active Check Error: {e}")
+            
     return HTMLResponse("", status_code=200)
 
 @router.get("/success", response_class=HTMLResponse)
-async def success_page(request: Request):
-    return templates.TemplateResponse("success.html", {"request": request})
+async def success_page(request: Request, job_id: str = None):
+    return templates.TemplateResponse("success.html", {
+        "request": request, 
+        "job_id": job_id
+    })
+
+@router.get("/jobs/{job_id}/status")
+async def get_job_status(job_id: str, db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+         return {"status": "unknown", "text": "Unknown Job"}
+    
+    display_text = "Processing..."
+    is_done = False
+    
+    if job.status == "processing":
+         display_text = "Processing..."
+    elif job.status == "printing":
+         display_text = "Printing your document..."
+    elif job.status == "completed":
+         display_text = "Done! Please collect your prints."
+         is_done = True
+    elif job.status == "failed":
+         display_text = "Printing Failed. Please contact support."
+         is_done = True
+         
+    return {
+        "status": job.status, 
+        "text": display_text,
+        "is_done": is_done
+    }

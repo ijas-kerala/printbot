@@ -54,6 +54,16 @@ class ConnectScreen(MDScreen):
         left_panel.add_widget(title)
         left_panel.add_widget(desc)
         
+        # Status Label (Hidden by default until update)
+        self.status_label = MDLabel(
+            text="",
+            halign="center",
+            theme_text_color="Custom",
+            text_color=(0, 0, 1, 1), # Blue
+            font_style="Subtitle1"
+        )
+        left_panel.add_widget(self.status_label)
+        
         # Right: QR Code Card
         right_panel = MDCard(
             radius=[20,],
@@ -82,6 +92,11 @@ class ConnectScreen(MDScreen):
         
         self.add_widget(layout)
         self.add_widget(admin_btn)
+
+    def update_status(self, text):
+        """Updates the status label on the connect screen."""
+        if self.status_label:
+            self.status_label.text = text
 
     def open_admin_login(self, instance):
         print("Admin login triggered")
