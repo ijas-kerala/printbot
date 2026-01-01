@@ -25,6 +25,7 @@ class PricingRule(Base):
     id = Column(Integer, primary_key=True, index=True)
     min_pages = Column(Integer, default=1)
     max_pages = Column(Integer, nullable=True)  # Null for "infinity"
+    is_duplex = Column(Boolean, default=False)
     price_per_page = Column(Float, nullable=False)
 
 class Payment(Base):

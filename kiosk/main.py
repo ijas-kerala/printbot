@@ -4,6 +4,9 @@ import time
 from kivy.config import Config
 
 # Reliability: Hardened UI Config
+# Fix Critical Clipboard Error: Force 'simple' (internal) clipboard to avoid xclip dependency
+os.environ["KIVY_CLIPBOARD"] = "simple"
+
 Config.set('graphics', 'cursor_visible', '0') # Hide mouse
 Config.set('graphics', 'fullscreen', 'auto') # Force fullscreen
 Config.set('input', 'mouse', 'mouse,multitouch_on_demand') # Disable red dots
@@ -20,7 +23,7 @@ from requests.exceptions import RequestException
 # Add project root to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kiosk.screens import AttractScreen, ConnectScreen, StatusScreen
+from kiosk.screens import AttractScreen, ConnectScreen, StatusScreen, SuccessScreen
 from kiosk.mascot import MascotWidget
 
 class PrintJoyApp(MDApp):
@@ -37,6 +40,7 @@ class PrintJoyApp(MDApp):
             sm.add_widget(AttractScreen(name='attract'))
             sm.add_widget(ConnectScreen(name='connect'))
             sm.add_widget(StatusScreen(name='status'))
+            sm.add_widget(SuccessScreen(name='success'))
             
             return sm
         except Exception as e:
@@ -46,8 +50,8 @@ class PrintJoyApp(MDApp):
     def on_start(self):
         # Start watchdog heartbeat
         Clock.schedule_interval(self.touch_heartbeat, 5.0)
-        # Start polling for status updates
-        Clock.schedule_interval(self.check_status, 3.0)
+        # Start polling for status updates (Faster polling for responsiveness)
+        Clock.schedule_interval(self.check_status, 1.5)
 
     def touch_heartbeat(self, dt):
         """
@@ -82,6 +86,7 @@ class PrintJoyApp(MDApp):
         - idle -> AttractScreen
         - uploading -> ConnectScreen
         - printing -> StatusScreen
+        - (Internal) success -> SuccessScreen
         """
         try:
             current_screen = self.root.current
@@ -96,6 +101,25 @@ class PrintJoyApp(MDApp):
             
             target_screen = state_map.get(new_state, "attract")
             
+            # SPECIAL CASE: Transition from Printing (status) -> Idle (attract)
+            # This implies the job finished successfully. Show Success screen first.
+            if current_screen == 'status' and target_screen == 'attract':
+                self.show_success_and_reset()
+                return
+
+            # If we are currently showing success, don't interrupt it with 'idle'
+            if current_screen == 'success' and target_screen == 'attract':
+                return
+
+            # FIX: If user is on Connect Screen (scanning) and backend is Idle,
+            # DO NOT force them back to Attract Screen.
+            if current_screen == 'connect' and target_screen == 'attract':
+                # Just Ensure Connect Screen is in "Scan" mode (Show QR)
+                screen = self.root.get_screen('connect')
+                if hasattr(screen, 'set_state'):
+                    screen.set_state('scan')
+                return
+
             if current_screen != target_screen:
                 self.root.current = target_screen
                 
@@ -104,8 +128,28 @@ class PrintJoyApp(MDApp):
                 screen = self.root.get_screen(target_screen)
                 if hasattr(screen, 'update_status') and "status" in data:
                      screen.update_status(data["status"])
+                
+                # Logic to hide QR code if we are in "uploading" state (meaning file exists)
+                if new_state == "uploading" and target_screen == "connect":
+                    if hasattr(screen, 'set_state'):
+                        screen.set_state('busy')
+
         except Exception as e:
             print(f"Error in handle_status_update: {e}")
+
+    def show_success_and_reset(self):
+        """Switch to Success screen and schedule return to Attract."""
+        try:
+            print("Job Complete. Showing Success Screen.")
+            self.root.current = 'success'
+            # Reset to attract screen after 5 seconds
+            Clock.unschedule(self.reset_to_attract)
+            Clock.schedule_once(self.reset_to_attract, 5.0)
+        except Exception as e:
+            print(f"Error in show_success: {e}")
+
+    def reset_to_attract(self, dt):
+        self.root.current = 'attract'
 
 def restart_program():
     """Restarts the current program."""

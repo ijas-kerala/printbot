@@ -72,6 +72,7 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
             filename=file.filename,
             file_path=file_path,
             page_count=page_count,
+            total_pages=page_count,
             status="uploaded"
         )
         db.add(new_job)

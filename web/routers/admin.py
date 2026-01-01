@@ -79,6 +79,7 @@ def dashboard(request: Request, user: str = Depends(get_current_user), db: Sessi
 
     # Recent Jobs
     recent_jobs = db.query(Job).order_by(Job.created_at.desc()).limit(10).all()
+    pricing_rules = db.query(PricingRule).order_by(PricingRule.min_pages.asc()).all()
 
     return templates.TemplateResponse("admin_dashboard.html", {
         "request": request,
@@ -87,7 +88,8 @@ def dashboard(request: Request, user: str = Depends(get_current_user), db: Sessi
         "failed_jobs": failed_jobs,
         "total_revenue": total_revenue,
         "price_per_page": settings.PRICE_PER_PAGE,
-        "recent_jobs": recent_jobs
+        "recent_jobs": recent_jobs,
+        "pricing_rules": pricing_rules
     })
 
 @router.get("/api/stats")
@@ -121,19 +123,45 @@ def get_stats(user: str = Depends(get_current_user), db: Session = Depends(get_d
         
     return {"labels": dates, "data": revenues}
 
-@router.post("/api/pricing")
-def update_pricing(price: float = Form(...), user: str = Depends(get_current_user)):
+@router.post("/api/pricing-rule/delete")
+def delete_pricing_rule(rule_id: int = Form(...), user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not user: raise HTTPException(status_code=401)
+    db.query(PricingRule).filter(PricingRule.id == rule_id).delete()
+    db.commit()
+    return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+@router.post("/api/pricing-rule/add")
+def add_pricing_rule(
+    min_pages: int = Form(...),
+    max_pages: str = Form(None), # Accepts empty string
+    is_duplex: str = Form(None), # Checkbox
+    price: float = Form(...),
+    user: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not user: raise HTTPException(status_code=401)
     
-    # Update settings
-    # Since settings is a pydantic BaseSettings loaded from env, updating it 'live' 
-    # only affects memory, not the .env file.
-    # For persistence, we should probably check if we have a DB override.
-    # For this task, updating memory is "okay" but a restart resets it. 
-    # Ideally we'd overwrite .env or use a DB setting.
-    # Let's simple update the in-memory settings.
-    settings.PRICE_PER_PAGE = price
+    # Clean max_pages
+    max_p = None
+    if max_pages and max_pages.strip():
+        max_p = int(max_pages)
+        
+    is_duplex_bool = True if is_duplex == 'on' else False
+    
+    new_rule = PricingRule(
+        min_pages=min_pages,
+        max_pages=max_p,
+        is_duplex=is_duplex_bool,
+        price_per_page=price
+    )
+    db.add(new_rule)
+    db.commit()
     return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+# Deprecated simple price updater, kept or removed? 
+# The UI will replace it, so we can remove or keep for legacy. 
+# Let's remove it to avoid confusion.
+
 
 @router.get("/api/jobs")
 def get_jobs(user: str = Depends(get_current_user), db: Session = Depends(get_db)):

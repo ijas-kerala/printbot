@@ -10,7 +10,8 @@ class MascotWidget(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = "vertical"
-        self.img = Image(source=self.source, allow_stretch=True)
+        # Fix for Kivy Deprecation Warning (allow_stretch -> fit_mode)
+        self.img = Image(source=self.source, fit_mode="contain")
         self.add_widget(self.img)
         self.bind(state=self.update_mascot)
         

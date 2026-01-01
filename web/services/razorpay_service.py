@@ -117,6 +117,45 @@ class RazorpayService:
             print(f"Error creating Razorpay link: {e}")
             raise e
 
+    def create_order(self, amount: float, currency: str = "INR", receipt: str = None, notes: dict = None):
+        """
+        Creates a Razorpay Order and returns the order ID.
+        If disabled, returns a MOCK order ID.
+        """
+        # MOCK MODE
+        if not self.enabled:
+            print("Creating MOCK Order")
+            return {
+                "id": f"order_mock_{receipt if receipt else 'generic'}",
+                "amount": int(amount * 100),
+                "currency": currency,
+                "status": "created"
+            }
+
+        # REAL MODE
+        amount_paise = int(amount * 100)
+        
+        data = {
+            "amount": amount_paise,
+            "currency": currency,
+            "receipt": receipt,
+            "notes": notes or {}
+        }
+        
+        try:
+            order = self.client.order.create(data=data)
+            return order
+        except Exception as e:
+            print(f"Error creating Razorpay order: {e}")
+            raise e
+
+    def fetch_order(self, order_id: str):
+        try:
+            return self.client.order.fetch(order_id)
+        except Exception as e:
+            print(f"Error fetching order: {e}")
+            return None
+
     def fetch_payment_link_status(self, payment_link_id: str):
         try:
             return self.client.payment_link.fetch(payment_link_id)

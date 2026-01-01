@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from core.database import get_db, SessionLocal
-from web.models.models import Job
+from web.models.models import Job, PricingRule
 from core.config import settings as config_settings
 from web.services.razorpay_service import razorpay_service
 import uuid
@@ -19,13 +19,28 @@ async def print_settings_page(request: Request, file_id: str):
     job = db.query(Job).filter(Job.id == file_id).first()
     db.close()
     
-    total_pages = job.total_pages if job else 1
+    total_pages = job.page_count if job else 1
     
+    pricing_rules = db.query(PricingRule).all()
+    
+    # Serialize rules for frontend
+    rules_data = [
+        {
+            "id": r.id, 
+            "min": r.min_pages, 
+            "max": r.max_pages, 
+            "is_duplex": r.is_duplex, 
+            "price": r.price_per_page
+        } 
+        for r in pricing_rules
+    ]
+
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "file_id": file_id,
         "total_pages": total_pages,
-        "price_per_page": config_settings.PRICE_PER_PAGE
+        "price_per_page": config_settings.PRICE_PER_PAGE, # Keep for fallback
+        "pricing_rules": rules_data
     })
 
 @router.post("/print-settings")
@@ -55,32 +70,42 @@ async def process_settings(
         sheets = math.ceil(actual_pages / 2)
         
     total_sheets = sheets * copies
-    amount = total_sheets * config_settings.PRICE_PER_PAGE
     
-    # Create Razorpay Order/Link
+    # Calculate Price using Dynamic Rules
+    # Find best matching rule:
+    # 1. Matches duplex setting
+    # 2. total_sheets >= min_pages
+    # 3. total_sheets <= max_pages (or max_pages is None)
+    # Order by min_pages DESC to prefer specific bulk rules over generic ones
+    rule = db.query(PricingRule).filter(
+        PricingRule.is_duplex == is_duplex_bool,
+        PricingRule.min_pages <= total_sheets,
+        (PricingRule.max_pages == None) | (PricingRule.max_pages >= total_sheets)
+    ).order_by(PricingRule.min_pages.desc()).first()
+    
+    # Fallback price if no rule found (should catch in setup, but safety net)
+    unit_price = config_settings.PRICE_PER_PAGE
+    if rule:
+        unit_price = rule.price_per_page
+        
+    amount = total_sheets * unit_price
+    
+    # Create Razorpay Order
     order_id = f"order_{uuid.uuid4().hex[:8]}" # Default internal ID
-    payment_link_url = None
-    qr_code_b64 = None
     
     if razorpay_service.enabled:
         try:
-            link_data = razorpay_service.create_payment_link(
+            rp_order = razorpay_service.create_order(
                 amount=amount,
-                description=f"Print Job {file_id}",
-                reference_id=order_id
+                receipt=f"rcpt_{file_id[:25]}",
+                notes={"file_id": file_id}
             )
-            if link_data:
-                payment_link_url = link_data.get('short_url')
-                # order_id = link_data.get('payment_link_id', order_id) # Use RP ID if available? Or store both?
-                # Actually, our DB expects razorpay_order_id to be the link ID for webhooks to work
-                # But RP link IDs look like 'plink_...' 
-                # Let's use the one RP gives us.
-                order_id = link_data.get('payment_link_id')
-                qr_code_b64 = link_data.get('qr_code_base64')
+            if rp_order:
+                order_id = rp_order.get('id')
         except Exception as e:
             print(f"Razorpay Gen Error: {e}")
             # CRITICAL: Do not swallow error. Show it to user for debugging.
-            raise HTTPException(status_code=500, detail=f"Payment Link Generation Failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Order Generation Failed: {str(e)}")
     
     # Update Job
     job.copies = copies
@@ -92,11 +117,8 @@ async def process_settings(
     db.commit()
     
     # Redirect to payment page
-    import urllib.parse
+    # Redirect to payment page
     redirect_url = f"/payment/{order_id}"
-    if payment_link_url:
-        encoded_link = urllib.parse.quote(payment_link_url)
-        redirect_url += f"?payment_link={encoded_link}"
     
     return RedirectResponse(url=redirect_url, status_code=303)
 
@@ -110,21 +132,13 @@ async def payment_page(request: Request, order_id: str, payment_link: str = None
          # checks job.id? No, order_id is distinct.
         raise HTTPException(status_code=404, detail="Order not found")
         
-    # Generate Razorpay Link if not already (or use static QR logic)
-    # If passed in query param, use it (Real Razorpay or Mock Service)
-    final_link = payment_link
-    
-    if not final_link:
-        # Fallback (Old Mock Logic) - DISABLED FOR DEBUGGING
-        # final_link = f"upi://pay?pa=test@upi&pn=PrintBot&am={job.total_cost}&tn=PrintOrder"
-        raise HTTPException(status_code=500, detail="Payment Link missing. creation must have failed.")
+    # Just verify order exists
     
     return templates.TemplateResponse("payment.html", {
         "request": request,
         "amount": job.total_cost,
-        "payment_link": final_link,
         "order_id": order_id,
-        "qr_url": None # Template handles generating QR from 'payment_link' via JS
+        "key_id": config_settings.RAZORPAY_KEY_ID
     })
 
 @router.get("/payment-status/{order_id}")
@@ -152,11 +166,11 @@ async def check_payment_status(order_id: str, db: Session = Depends(get_db)):
     if job and job.status == "payment_pending" and razorpay_service.enabled:
         try:
             # print(f"Actively checking Razorpay status for {order_id}...")
-            # order_id here corresponds to the payment_link_id in Razorpay
-            pl_details = razorpay_service.fetch_payment_link_status(order_id)
+            # order_id is now a Razorpay Order ID (order_...)
+            order_details = razorpay_service.fetch_order(order_id)
             
-            if pl_details and pl_details.get('status') == 'paid':
-                print(f"✅ Active Check: Payment PAID for {order_id}")
+            if order_details and order_details.get('status') == 'paid':
+                print(f"✅ Active Check: Order PAID for {order_id}")
                 
                 # Update Job
                 job.status = "paid"
