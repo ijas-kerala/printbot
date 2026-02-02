@@ -27,7 +27,28 @@ def process_jobs():
         
         time.sleep(5) # Poll every 5 seconds
 
+
+from web.services.cleanup_service import cleanup_service
+
+def cleanup_worker():
+    """
+    Background worker that runs cleanup periodically.
+    """
+    while True:
+        try:
+            cleanup_service.cleanup_old_jobs()
+            # Run cleanup every 1 hour (3600 seconds)
+            time.sleep(3600)
+        except Exception as e:
+            print(f"Cleanup Worker Error: {e}")
+            time.sleep(300) # Retry in 5 mins if error
+
 def start_worker():
-    thread = threading.Thread(target=process_jobs, daemon=True)
-    thread.start()
+    # Job Processor Thread
+    processing_thread = threading.Thread(target=process_jobs, daemon=True)
+    processing_thread.start()
+    
+    # Cleanup Thread
+    cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
+    cleanup_thread.start()
 

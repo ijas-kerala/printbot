@@ -19,9 +19,12 @@ def get_upload_page(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 import fitz  # PyMuPDF
+from PIL import Image
+import zipfile
 
 @router.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_path = None
     try:
         # 1. Validate file type
         allowed_types = ["application/pdf", "image/jpeg", "image/png", 
@@ -50,21 +53,43 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
                     break
                 size += len(chunk)
                 if size > MAX_SIZE:
+                    buffer.close()
                     os.remove(file_path) # Clean up partial
                     return templates.TemplateResponse("index.html", {"request": request, "error": "File too large (Max 90MB)"})
                 buffer.write(chunk)
             
-        # 4. Accurate Page Counting
+        # 4. STRICT VALIDATION & Page Counting
         page_count = 1
-        try:
-            if file_ext == ".pdf":
+        
+        # Check based on extension
+        if file_ext == ".pdf":
+            try:
                 doc = fitz.open(file_path)
                 page_count = doc.page_count
                 doc.close()
-            # Images and DOCX default to 1 for now (DOCX calculated after conversion)
-        except Exception as e:
-            print(f"Page count error: {e}")
-            # Fallback to 1, don't fail upload just for this
+            except Exception as e:
+                print(f"❌ Strict Validation Failed (PDF): {e}")
+                if os.path.exists(file_path): os.remove(file_path)
+                return templates.TemplateResponse("index.html", {"request": request, "error": "Uploaded PDF is corrupt or invalid."})
+
+        elif file_ext in [".jpg", ".jpeg", ".png"]:
+            try:
+                with Image.open(file_path) as img:
+                    img.verify() # Verify it's an image
+                page_count = 1
+            except Exception as e:
+                print(f"❌ Strict Validation Failed (Image): {e}")
+                if os.path.exists(file_path): os.remove(file_path)
+                return templates.TemplateResponse("index.html", {"request": request, "error": "Uploaded image is corrupt."})
+
+        elif file_ext == ".docx":
+            # Basic zip check for DOCX (DOCX is a zip file)
+            if not zipfile.is_zipfile(file_path):
+                print(f"❌ Strict Validation Failed (DOCX): Not a valid zip")
+                if os.path.exists(file_path): os.remove(file_path)
+                return templates.TemplateResponse("index.html", {"request": request, "error": "Uploaded DOCX is invalid."})
+            
+            # Note: We count DOCX pages as 1 initially, accurate count happens after conversion if needed
             page_count = 1
 
         new_job = Job(
@@ -87,5 +112,8 @@ async def upload_file(request: Request, file: UploadFile = File(...), db: Sessio
 
     except Exception as e:
         print(f"Upload Error: {e}")
+        # Cleanup if something went wrong and file exists
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
         return templates.TemplateResponse("index.html", {"request": request, "error": "System Error during upload. Please try again."})
 

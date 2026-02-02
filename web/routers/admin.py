@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Form
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, extract
+import csv
+import io
 from core.database import get_db
 from web.models.models import Job, PricingRule
 from core.config import settings
@@ -168,3 +170,56 @@ def get_jobs(user: str = Depends(get_current_user), db: Session = Depends(get_db
     if not user: raise HTTPException(status_code=401)
     jobs = db.query(Job).order_by(Job.created_at.desc()).limit(50).all()
     return jobs
+
+@router.post("/api/export-csv")
+def export_csv(
+    month: str = Form(...), # Format: YYYY-MM
+    user: str = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    if not user: raise HTTPException(status_code=401)
+    
+    # Parse month string "YYYY-MM"
+    try:
+        y_str, m_str = month.split('-')
+        year = int(y_str)
+        month_int = int(m_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+
+    # Filter jobs
+    jobs = db.query(Job).filter(
+        extract('year', Job.created_at) == year,
+        extract('month', Job.created_at) == month_int
+    ).order_by(Job.created_at.asc()).all()
+
+    # Create CSV in-memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write Header
+    writer.writerow(["Job ID", "Time", "Filename", "Pages", "Copies", "Duplex", "Cost (INR)", "Status", "Payment ID"])
+    
+    # Write Rows
+    for job in jobs:
+        writer.writerow([
+            job.id,
+            job.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            job.filename,
+            job.page_count,
+            job.copies,
+            "Yes" if job.is_duplex else "No",
+            f"{job.total_cost:.2f}",
+            job.status,
+            job.razorpay_order_id or "N/A"
+        ])
+        
+    output.seek(0)
+    
+    filename = f"printbot_jobs_{month}.csv"
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )

@@ -73,6 +73,30 @@ class JobProcessor:
             # Simple Retry Logic (could be expanded to a retry_count column)
             # For now, mark as failed so we don't loop infinitely on a bad file
             job.status = "failed" 
+            
+            # [CREDIT SYSTEM] Generate Coupon for Refund
+            # 1. Check if coupon already exists for this job (prevent duplicates if retried)
+            from web.models.models import Coupon
+            existing = db.query(Coupon).filter(Coupon.original_job_id == job_id).first()
+            
+            if not existing and job.total_cost > 0:
+                import uuid
+                # Generate unique 8-char code
+                code = f"RETRY-{uuid.uuid4().hex[:4].upper()}"
+                
+                # Check collision (unlikely but safe)
+                while db.query(Coupon).filter(Coupon.code == code).first():
+                    code = f"RETRY-{uuid.uuid4().hex[:4].upper()}"
+                
+                coupon = Coupon(
+                    code=code,
+                    amount=job.total_cost,
+                    initial_amount=job.total_cost,
+                    original_job_id=job.id
+                )
+                db.add(coupon)
+                print(f"💰 Coupon Generated for Failed Job {job.id}: {code} (₹{job.total_cost})")
+
             # In a real retry system: if job.retries < 3: job.retries += 1; job.status = "paid"
             
             db.commit()

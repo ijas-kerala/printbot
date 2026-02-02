@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from core.database import get_db, SessionLocal
-from web.models.models import Job, PricingRule
+from web.models.models import Job, PricingRule, Coupon
 from core.config import settings as config_settings
 from web.services.razorpay_service import razorpay_service
 import uuid
@@ -50,6 +50,7 @@ async def process_settings(
     copies: int = Form(...),
     page_range: str = Form(""),
     duplex: str = Form(None), # Checkbox sends 'on' or None
+    coupon_code: str = Form(None), # Optional Coupon Code
     db: Session = Depends(get_db)
 ):
     job = db.query(Job).filter(Job.id == file_id).first()
@@ -62,6 +63,11 @@ async def process_settings(
     actual_pages = len(pages_list)
     
     is_duplex_bool = True if duplex == 'on' else False
+    
+    # Auto-Correction: If only 1 page, force Simplex
+    if actual_pages == 1 and is_duplex_bool:
+        print(f"Auto-Switching to Simplex for 1-page job (Job {file_id})")
+        is_duplex_bool = False
     
     # Calculate sheets
     sheets = actual_pages
@@ -90,10 +96,36 @@ async def process_settings(
         
     amount = total_sheets * unit_price
     
+    # [CREDIT SYSTEM] Coupon Redemption Logic
+    coupon_msg = ""
+    if coupon_code:
+        coupon_code = coupon_code.strip().upper()
+        # Find coupon
+        coupon = db.query(Coupon).filter(Coupon.code == coupon_code).first()
+        
+        if coupon and coupon.amount > 0:
+            print(f"🎟 Applying Coupon {coupon_code}. Bal: {coupon.amount}, Cost: {amount}")
+            
+            # Logic: Deduct from coupon
+            deduction = min(coupon.amount, amount)
+            
+            coupon.amount -= deduction
+            amount -= deduction
+            
+            if amount < 0: amount = 0 # Safety
+            
+            coupon_msg = f"Coupon Applied. Deducted: ₹{deduction}"
+            print(f" -> New Total: {amount} | New Coupon Bal: {coupon.amount}")
+            
+        else:
+            print(f"❌ Invalid or Empty Coupon: {coupon_code}")
+            # We don't stop the flow, just ignore invalid coupon
+
+    
     # Create Razorpay Order
     order_id = f"order_{uuid.uuid4().hex[:8]}" # Default internal ID
     
-    if razorpay_service.enabled:
+    if amount > 0 and razorpay_service.enabled:
         try:
             rp_order = razorpay_service.create_order(
                 amount=amount,
@@ -114,6 +146,31 @@ async def process_settings(
     job.total_cost = amount
     job.razorpay_order_id = order_id
     job.status = "payment_pending"
+    
+    # Check if Fully Paid by Coupon
+    if amount == 0:
+         job.status = "paid"
+         # Mark order_id as 'internal_paid' to skip checks
+         order_id = f"paid_by_coupon_{uuid.uuid4().hex[:6]}"
+         job.razorpay_order_id = order_id
+         
+         # Trigger Processing Immediately
+         from web.services.job_processor import job_processor
+         try:
+             job_processor.process_single_job(job.id)
+         except:
+             pass # Will be picked up by poller if this fails
+             
+         print(f"✅ Job {file_id} fully paid by COUPON.")
+         
+         # Redirect directly to Success (skipping payment page essentially)
+         # Actually, we should redirect to payment page, which will then auto-redirect to success?
+         # Or just direct success? 
+         # Redirect to success is cleaner.
+         db.commit()
+         return RedirectResponse(url=f"/success?job_id={job.id}", status_code=303)
+
+    db.commit()
     db.commit()
     
     # Redirect to payment page
@@ -133,6 +190,11 @@ async def payment_page(request: Request, order_id: str, payment_link: str = None
         raise HTTPException(status_code=404, detail="Order not found")
         
     # Just verify order exists
+    
+    # [FIX] Immediate Redirect if already paid (Back Button Fix)
+    if job.status in ["paid", "processing", "printing", "completed"]:
+        return RedirectResponse(url=f"/success?job_id={job.id}", status_code=303)
+
     
     return templates.TemplateResponse("payment.html", {
         "request": request,
@@ -217,19 +279,63 @@ async def get_job_status(job_id: str, db: Session = Depends(get_db)):
     display_text = "Processing..."
     is_done = False
     
+    driver_status = None
+    
     if job.status == "processing":
          display_text = "Processing..."
     elif job.status == "printing":
-         display_text = "Printing your document..."
+         display_text = "Sending to printer..."
+         
+         # [HARDWARE CHECK] specific to this job's active phase
+         from web.services.printer_service import printer_service
+         hw_status = printer_service.get_printer_status_attributes()
+         
+         if hw_status.get('state') == 'stopped':
+             reasons = hw_status.get('reasons', [])
+             
+             if 'media-empty-warning' in reasons or 'media-empty-error' in reasons:
+                 display_text = "Printer Out of Paper! Please add paper."
+                 driver_status = "error_paper"
+             elif 'marker-supply-low-warning' in reasons:
+                 display_text = "Toner Low... Printing might be faint."
+                 driver_status = "warning_toner"
+             elif 'offline' in reasons or 'shutdown' in reasons:
+                 display_text = "Printer Offline. Queued..."
+                 driver_status = "error_offline"
+             elif 'media-jam-warning' in reasons or 'media-jam-error' in reasons:
+                 display_text = "Paper Jam! Please check printer."
+                 driver_status = "error_jam"
+             else:
+                 msg = hw_status.get('message', '')
+                 if msg:
+                     display_text = f"Printer Paused: {msg}"
+                 else:
+                     display_text = "Printer Paused. Checking..."
+                 driver_status = "error_generic"
+         elif hw_status.get('state') == 'processing':
+             display_text = "Printing... (Machine Busy)"
+             
     elif job.status == "completed":
          display_text = "Done! Please collect your prints."
          is_done = True
     elif job.status == "failed":
-         display_text = "Printing Failed. Please contact support."
-         is_done = True
+          display_text = "Printing Failed. Please contact support."
+          is_done = True
+          
+          # [CREDIT SYSTEM] Check for Refund Coupon
+          coupon = db.query(Coupon).filter(Coupon.original_job_id == job_id).first()
+          if coupon:
+               return {
+                   "status": "failed",
+                   "text": f"Printing Failed. Use Coupon Code: {coupon.code} to retry for free!",
+                   "is_done": True,
+                   "coupon_code": coupon.code
+               }
          
     return {
         "status": job.status, 
         "text": display_text,
-        "is_done": is_done
+        "is_done": is_done,
+        "coupon_code": None, # Default
+        "driver_status": driver_status
     }

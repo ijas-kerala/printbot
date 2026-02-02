@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, CheckConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, CheckConstraint, ForeignKey
 from sqlalchemy.sql import func
 from core.database import Base
 
@@ -37,3 +37,13 @@ class Payment(Base):
     amount = Column(Float, nullable=False)
     status = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, unique=True, index=True, nullable=False)
+    amount = Column(Float, default=0.0)         # Current Balance
+    initial_amount = Column(Float, default=0.0) # Original Value
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    original_job_id = Column(String, ForeignKey("jobs.id"), nullable=True)

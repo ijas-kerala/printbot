@@ -151,5 +151,41 @@ class PrinterService:
             # Fallback to failing safely rather than printing wrong pages
             raise e
 
+    def get_printer_status_attributes(self):
+        """
+        Retrieves real-time hardware status from CUPS (IPP attributes).
+        Returns a dict with user-friendly status and raw details.
+        """
+        if self.mock_mode:
+            return {"state": "idle", "reasons": [], "message": "Ready (Mock)"}
+            
+        if not self.conn:
+             return {"state": "stopped", "reasons": ["offline"], "message": "Printer Service Unreachable"}
+
+        try:
+            # Fetch attributes for our specific printer
+            # printer-state: 3 (Idle), 4 (Processing), 5 (Stopped)
+            attrs = self.conn.getPrinterAttributes(self.printer_name, requested_attributes=["printer-state", # 3,4,5
+                                                                                          "printer-state-reasons", # List of strings e.g 'media-empty-warning'
+                                                                                          "printer-state-message"])
+            
+            raw_state = attrs.get('printer-state', 3)
+            reasons = attrs.get('printer-state-reasons', [])
+            message = attrs.get('printer-state-message', '')
+            
+            # Map State
+            state_map = {3: "idle", 4: "processing", 5: "stopped"}
+            state_str = state_map.get(raw_state, "unknown")
+            
+            return {
+                "state": state_str,
+                "reasons": reasons,
+                "message": message
+            }
+            
+        except Exception as e:
+            print(f"Error fetching printer attributes: {e}")
+            return {"state": "unknown", "reasons": ["communication-error"], "message": "Check Printer Connection"}
+
 printer_service = PrinterService()
 

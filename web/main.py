@@ -7,6 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from core.database import engine, Base
 from sqlalchemy import text
 
+# Import models to register them with Base.metadata
+from web.models import models as app_models
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
