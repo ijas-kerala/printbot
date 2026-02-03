@@ -290,30 +290,58 @@ async def get_job_status(job_id: str, db: Session = Depends(get_db)):
          from web.services.printer_service import printer_service
          hw_status = printer_service.get_printer_status_attributes()
          
-         if hw_status.get('state') == 'stopped':
+         if hw_status:
              reasons = hw_status.get('reasons', [])
+             state = hw_status.get('state')
              
+             # Check Critical Errors regardless of state
              if 'media-empty-warning' in reasons or 'media-empty-error' in reasons:
                  display_text = "Printer Out of Paper! Please add paper."
                  driver_status = "error_paper"
-             elif 'marker-supply-low-warning' in reasons:
-                 display_text = "Toner Low... Printing might be faint."
-                 driver_status = "warning_toner"
-             elif 'offline' in reasons or 'shutdown' in reasons:
-                 display_text = "Printer Offline. Queued..."
-                 driver_status = "error_offline"
              elif 'media-jam-warning' in reasons or 'media-jam-error' in reasons:
-                 display_text = "Paper Jam! Please check printer."
-                 driver_status = "error_jam"
-             else:
-                 msg = hw_status.get('message', '')
-                 if msg:
-                     display_text = f"Printer Paused: {msg}"
+                  display_text = "Paper Jam! Please check printer."
+                  driver_status = "error_jam"
+             elif 'offline' in reasons or 'shutdown' in reasons:
+                  display_text = "Printer Offline. Queued..."
+                  driver_status = "error_offline"
+             # Warnings (non-critical, maybe show but don't panic?)
+             elif 'marker-supply-low-warning' in reasons:
+                  display_text = "Toner Low... Printing might be faint."
+                  driver_status = "warning_toner"
+             # State-based messages (if no critical specific error found yet)
+             elif state == 'stopped':
+                  msg = hw_status.get('message', '')
+                  if msg:
+                      display_text = f"Printer Paused: {msg}"
+                  else:
+                      display_text = "Printer Paused. Checking..."
+                  driver_status = "error_generic"
+             elif state == 'processing':
+                   display_text = "Printing... (Machine Busy)"
+             
+         # [REAL-TIME FIX] Check specific CUPS job status
+         if job.cups_job_id:
+             cups_result = printer_service.get_cups_job_status(job.cups_job_id)
+             cups_status = cups_result.get("status") if isinstance(cups_result, dict) else cups_result
+             queue_position = cups_result.get("position") if isinstance(cups_result, dict) else None
+             
+             if cups_status == "completed":
+                 # Mark DB as completed so we stop polling
+                 job.status = "completed"
+                 display_text = "Done! Please collect your prints."
+                 is_done = True
+                 db.commit()
+             elif cups_status == "queued":
+                 # Job is waiting in CUPS queue
+                 if queue_position:
+                     display_text = f"Waiting in queue (Position #{queue_position})... ⏳"
                  else:
-                     display_text = "Printer Paused. Checking..."
-                 driver_status = "error_generic"
-         elif hw_status.get('state') == 'processing':
-             display_text = "Printing... (Machine Busy)"
+                     display_text = "Waiting in queue... Your turn is coming!"
+                 driver_status = "queued"
+             elif cups_status == "printing":
+                 # Actively printing - keep the hardware status message if set, otherwise generic
+                 if not driver_status:  # Only set if no hardware error detected
+                     display_text = "Printing your file now... 🖨️"
              
     elif job.status == "completed":
          display_text = "Done! Please collect your prints."

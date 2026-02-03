@@ -187,5 +187,64 @@ class PrinterService:
             print(f"Error fetching printer attributes: {e}")
             return {"state": "unknown", "reasons": ["communication-error"], "message": "Check Printer Connection"}
 
+    def get_cups_job_status(self, cups_job_id: int):
+        """
+        Checks the status of a specific job in CUPS with granular state detection.
+        Returns dict with:
+            - 'status': 'queued', 'printing', 'completed', 'held', 'stopped'
+            - 'position': Queue position (1-based) if queued, None otherwise
+        """
+        if self.mock_mode or not cups_job_id:
+             return {"status": "completed", "position": None}
+             
+        if not self.conn:
+             return {"status": "printing", "position": None}
+             
+        try:
+             # Get all active jobs (not completed)
+             jobs = self.conn.getJobs(which_jobs="not-completed", my_jobs=True)
+             
+             if cups_job_id not in jobs:
+                 # Job not in active queue, assume completed
+                 return {"status": "completed", "position": None}
+             
+             # Get detailed attributes for this specific job
+             try:
+                 attrs = self.conn.getJobAttributes(cups_job_id, requested_attributes=["job-state"])
+                 job_state = attrs.get('job-state', 5)  # Default to Processing if unknown
+             except:
+                 # Fallback: if we can't get attributes, assume it's processing
+                 job_state = 5
+             
+             # Map CUPS job-state to our status
+             # 3: Pending, 4: Held, 5: Processing, 6: Stopped, 7: Canceled, 8: Aborted, 9: Completed
+             state_map = {
+                 3: "queued",      # IPP_JOB_PENDING
+                 4: "held",        # IPP_JOB_HELD
+                 5: "printing",    # IPP_JOB_PROCESSING
+                 6: "stopped",     # IPP_JOB_STOPPED
+                 7: "completed",   # IPP_JOB_CANCELED (treat as completed)
+                 8: "completed",   # IPP_JOB_ABORTED (treat as completed)
+                 9: "completed"    # IPP_JOB_COMPLETED
+             }
+             
+             status = state_map.get(job_state, "printing")
+             
+             # Calculate queue position if job is queued
+             position = None
+             if status == "queued":
+                 # Get all job IDs and sort them (lower ID = submitted earlier)
+                 all_job_ids = sorted(jobs.keys())
+                 try:
+                     position = all_job_ids.index(cups_job_id) + 1  # 1-based position
+                 except ValueError:
+                     position = None
+             
+             return {"status": status, "position": position}
+                 
+        except Exception as e:
+            print(f"Error checking CUPS job {cups_job_id}: {e}")
+            return {"status": "printing", "position": None}
+
 printer_service = PrinterService()
 

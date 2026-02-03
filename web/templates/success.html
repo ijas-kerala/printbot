@@ -51,6 +51,17 @@
                                     msgEl.innerHTML = "Your document is ready.<br>Please collect it from the tray.";
                                     // Stop polling
 
+                                } else if (data.driver_status === 'queued') {
+                                    // [QUEUE STATUS] User is waiting in line
+                                    titleEl.innerText = "In Queue";
+                                    titleEl.classList.remove("from-brand-500", "to-brand-700");
+                                    titleEl.classList.add("from-yellow-500", "to-orange-500");
+
+                                    msgEl.innerHTML = `<span class="text-4xl block mb-2">⏳</span>${data.text}`;
+
+                                    // Continue polling to update position
+                                    setTimeout(checkStatus, 2000);
+
                                 } else if (data.driver_status && data.driver_status.startsWith('error')) {
                                     // [HARDWARE ERROR]
                                     titleEl.innerText = "Printer Issue";

@@ -18,6 +18,7 @@ class Job(Base):
     total_cost = Column(Float, default=0.0)
     razorpay_payment_id = Column(String, nullable=True)
     razorpay_order_id = Column(String, nullable=True)
+    cups_job_id = Column(Integer, nullable=True)
 
 class PricingRule(Base):
     __tablename__ = "pricing_rules"

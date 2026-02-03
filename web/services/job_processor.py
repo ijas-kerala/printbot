@@ -59,8 +59,11 @@ class JobProcessor:
             )
 
             if cups_job_id:
-                job.status = "completed"
-                print(f" -> SUCCESS. CUPS Job ID: {cups_job_id}")
+                # [FIX] Do NOT mark as completed yet. Let the status poller check CUPS.
+                # Just save the CUPS ID.
+                job.cups_job_id = cups_job_id
+                # job.status = "completed" <-- REMOVED
+                print(f" -> SUBMITTED. CUPS Job ID: {cups_job_id}. Keeping status as 'printing'.")
             else:
                 raise Exception("CUPS submission failed (No Job ID)")
 
