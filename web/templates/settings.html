@@ -107,11 +107,45 @@
                 </div>
 
                 <!-- Custom Range Input (Hidden by default) -->
-                <div id="customRangeContainer" class="hidden mt-4 animate-in slide-in-from-top-2">
-                    <label class="text-xs font-bold text-slate-400 uppercase ml-1">Example: 1-5, 8</label>
-                    <input type="text" placeholder="Enter pages (e.g. 1-3)"
-                        class="input input-lg w-full bg-white border-2 border-brand-200 focus:border-brand-500 focus:outline-none rounded-xl font-mono text-lg mt-1"
-                        id="visiblePageRange" oninput="syncCustomRange()" />
+                <div id="customRangeContainer"
+                    class="hidden mt-4 animate-in slide-in-from-top-2 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 shadow-inner-sm">
+                    <div class="flex justify-between items-center mb-2 px-1">
+                        <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Specify
+                            Pages</label>
+                        <span class="text-[10px] font-bold text-slate-400">Example: 1-5, 8</span>
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <input type="text" placeholder="Enter page numbers..."
+                            class="input input-lg w-full bg-white border-2 border-brand-100 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 focus:outline-none rounded-xl font-mono text-lg transition-all shadow-sm"
+                            id="visiblePageRange" oninput="validateRangeInput()" />
+
+                        <button type="button" onclick="applyPageRange(this)" id="applyRangeBtn"
+                            class="btn btn-lg w-full rounded-xl shadow-lg shadow-indigo-200 border-none text-white font-black bg-indigo-600 hover:bg-indigo-700 active:scale-[0.95] transition-all duration-200 flex items-center justify-center gap-2 group">
+                            <span class="btn-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
+                                    fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                            </span>
+                            <span class="btn-text">Apply Selection</span>
+                        </button>
+                    </div>
+
+                    <!-- Warning/Error Messages -->
+                    <div id="rangeWarning"
+                        class="hidden mt-3 p-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-xs font-bold animate-in fade-in duration-300">
+                        <div class="flex items-start gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0 mt-0.5" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span id="rangeWarningText"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -251,27 +285,117 @@
 
     // --- Logic for Page Range Selection ---
     function selectPageOption(type) {
+        // [RESTRICTION] Prevent custom range for single-page documents
+        if (type === 'custom' && originalPages === 1) {
+            // Visual feedback that it's not available
+            return; // Do nothing
+        }
+
         // UI Update
         document.querySelectorAll('.page-option').forEach(el => el.classList.remove('selected'));
         document.getElementById('opt-' + type).classList.add('selected');
 
         const realInput = document.getElementById('realPageRange');
         const customContainer = document.getElementById('customRangeContainer');
+        const warningDiv = document.getElementById('rangeWarning');
 
         if (type === 'custom') {
             customContainer.classList.remove('hidden');
-            syncCustomRange(); // Update real input from visible custom input
+            validateRangeInput(); // Validate on open
         } else {
             customContainer.classList.add('hidden');
+            warningDiv.classList.add('hidden'); // Hide warnings
             if (type === 'all') realInput.value = '';
+            updatePrice();
         }
-        updatePrice();
     }
 
     function syncCustomRange() {
         const val = document.getElementById('visiblePageRange').value;
         document.getElementById('realPageRange').value = val;
-        updatePrice();
+    }
+
+    // --- Validation for Page Range Input ---
+    function validateRangeInput() {
+        const input = document.getElementById('visiblePageRange').value;
+        const warningDiv = document.getElementById('rangeWarning');
+        const warningText = document.getElementById('rangeWarningText');
+
+        if (!input.trim()) {
+            warningDiv.classList.add('hidden');
+            return;
+        }
+
+        const warnings = [];
+        const parts = input.split(',');
+
+        parts.forEach(part => {
+            part = part.trim();
+            if (!part) return;
+
+            // Check for invalid characters (letters, special symbols except dash)
+            if (/[a-zA-Z@#$%^&*()_+=\[\]{}|;:'",<>?/\\]/.test(part)) {
+                warnings.push(`Invalid characters detected`);
+                return;
+            }
+
+            // Check for double dashes
+            if (part.includes('--')) {
+                warnings.push(`Double dash "--" not allowed`);
+                return;
+            }
+
+            // Check for out-of-range pages
+            const nums = part.match(/\d+/g);
+            if (nums) {
+                nums.forEach(num => {
+                    const pageNum = parseInt(num);
+                    if (pageNum > originalPages) {
+                        warnings.push(`Page ${pageNum} doesn't exist (max: ${originalPages})`);
+                    }
+                    if (pageNum < 1) {
+                        warnings.push(`Page numbers must be 1 or higher`);
+                    }
+                });
+            }
+        });
+
+        // Show warnings
+        if (warnings.length > 0) {
+            // Remove duplicates
+            const uniqueWarnings = [...new Set(warnings)];
+            warningText.innerHTML = uniqueWarnings.join('. ');
+            warningDiv.classList.remove('hidden');
+            warningDiv.classList.add('text-warning');
+        } else {
+            warningDiv.classList.add('hidden');
+        }
+    }
+
+    function applyPageRange(btn) {
+        validateRangeInput();
+        syncCustomRange(); // Update hidden input
+        updatePrice(); // Recalculate price
+
+        // Provide visual feedback
+        if (btn) {
+            const originalContent = btn.innerHTML;
+            const originalBg = btn.className;
+
+            btn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 animate-bounce" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>Applied!</span>
+            `;
+            btn.classList.add('bg-green-600', 'hover:bg-green-600');
+            btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+
+            setTimeout(() => {
+                btn.innerHTML = originalContent;
+                btn.className = originalBg;
+            }, 1500);
+        }
     }
 
     // --- Logic for Copies ---
@@ -308,21 +432,35 @@
         const rangeVal = document.getElementById('realPageRange').value.trim().toLowerCase();
 
         if (rangeVal !== '') {
-            // Attempt to parse "1-5, 8"
-            // Simple visual approximation
+            // Robust parsing: count unique valid pages only
+            const validPages = new Set();
             const parts = rangeVal.split(',');
-            let count = 0;
+
             parts.forEach(p => {
+                p = p.trim();
                 if (p.includes('-')) {
-                    const [start, end] = p.split('-').map(Number);
-                    if (start > 0 && end > 0) count += (Math.abs(end - start) + 1);
+                    const [start, end] = p.split('-').map(n => parseInt(n.trim()));
+                    if (!isNaN(start) && !isNaN(end)) {
+                        const min = Math.min(start, end);
+                        const max = Math.max(start, end);
+                        // Only add pages that actually exist in the document
+                        for (let i = min; i <= max; i++) {
+                            if (i >= 1 && i <= originalPages) {
+                                validPages.add(i);
+                            }
+                        }
+                    }
                 } else {
-                    if (Number(p)) count++;
+                    const page = parseInt(p);
+                    if (!isNaN(page) && page >= 1 && page <= originalPages) {
+                        validPages.add(page);
+                    }
                 }
             });
-            if (count > 0) estPages = count;
-            // Clamp
-            if (estPages > originalPages) estPages = originalPages;
+
+            // If the user entered something but no valid pages were found, 
+            // fallback to originalPages or handle as 0 (UX choice: 0 is more honest for pricing)
+            estPages = validPages.size;
         }
 
         // Duplex Math
@@ -387,5 +525,18 @@
     selectPageOption('all');
     setDuplex(false);
     updatePrice();
+
+    // [RESTRICTION] Disable custom range option for single-page documents
+    if (originalPages === 1) {
+        const customOption = document.getElementById('opt-custom');
+        customOption.classList.add('opacity-50', 'cursor-not-allowed');
+        customOption.onclick = null; // Remove click handler
+
+        // Add tooltip hint
+        const customSpan = customOption.querySelector('span');
+        if (customSpan) {
+            customSpan.title = 'Range selection not available for single-page documents';
+        }
+    }
 </script>
 {% endblock %}

@@ -31,9 +31,11 @@ class PrinterService:
                 return input_path
             
             elif ext in [".jpg", ".jpeg", ".png"]:
-                # Convert Image to PDF
+                # Convert Image to PDF with rotation handling
+                # The ifvalid parameter tells img2pdf to skip invalid rotation metadata
+                # instead of failing. This is common in images from phones/cameras.
                 with open(output_pdf, "wb") as f:
-                    f.write(img2pdf.convert(input_path))
+                    f.write(img2pdf.convert(input_path, rotation=img2pdf.Rotation.ifvalid))
                 return output_pdf
             
             elif ext in [".docx", ".doc", ".txt"]:
@@ -163,9 +165,20 @@ class PrinterService:
              return {"state": "stopped", "reasons": ["offline"], "message": "Printer Service Unreachable"}
 
         try:
-            # Fetch attributes for our specific printer
+            # Discover available printers and use fallback if configured printer doesn't exist
+            printers = self.conn.getPrinters()
+            printer_target = self.printer_name
+            
+            if printer_target not in printers:
+                print(f"Printer {self.printer_name} not found for status check. Available: {list(printers.keys())}")
+                if printers:
+                    printer_target = list(printers.keys())[0]  # Fallback to first available
+                else:
+                    return {"state": "stopped", "reasons": ["no-printer-found"], "message": "No Printers Available"}
+            
+            # Fetch attributes for the target printer
             # printer-state: 3 (Idle), 4 (Processing), 5 (Stopped)
-            attrs = self.conn.getPrinterAttributes(self.printer_name, requested_attributes=["printer-state", # 3,4,5
+            attrs = self.conn.getPrinterAttributes(printer_target, requested_attributes=["printer-state", # 3,4,5
                                                                                           "printer-state-reasons", # List of strings e.g 'media-empty-warning'
                                                                                           "printer-state-message"])
             
