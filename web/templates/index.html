@@ -74,8 +74,9 @@
     </div>
 
     <!-- Google Drive Upload Guidance -->
-    <div class="collapse collapse-arrow bg-blue-50 border border-blue-200 rounded-2xl shadow-sm">
-        <input type="checkbox" />
+    <div id="google-drive-container"
+        class="collapse collapse-arrow bg-blue-50 border border-blue-200 rounded-2xl shadow-sm transition-all duration-300">
+        <input type="checkbox" id="google-drive-toggle" />
         <div class="collapse-title text-sm font-bold text-blue-700 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                 stroke="currentColor">
@@ -115,27 +116,89 @@
 <script>
     function handleFileSelect(input) {
         if (input.files && input.files[0]) {
-            const form = document.getElementById('uploadForm');
-            const overlay = document.getElementById('loading-overlay');
-            const dropZone = document.getElementById('drop-zone');
+            uploadFile(input.files[0]);
+        }
+    }
 
-            // Show loading state
-            overlay.classList.remove('hidden');
-            overlay.classList.add('flex');
+    async function uploadFile(file) {
+        const input = document.querySelector('input[name="file"]');
+        const overlay = document.getElementById('loading-overlay');
+        const driveToggle = document.getElementById('google-drive-toggle');
+        const driveContainer = document.getElementById('google-drive-container');
 
-            // Verify size client-side for immediate feedback
-            const maxSize = 90 * 1024 * 1024;
-            if (input.files[0].size > maxSize) {
-                alert("File is too large! Max 90MB.");
-                overlay.classList.add('hidden');
-                overlay.classList.remove('flex');
-                input.value = "";
+        // Show loading state
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+
+        // 1. Pre-upload client-side check (fast fail)
+        const maxSize = 90 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert("File is too large! Max 90MB.");
+            resetUI(input, overlay);
+            return;
+        }
+
+        // 2. Prepare AJAX Upload
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Perform the upload via Fetch API
+            // This allows us to catch "ERR_UPLOAD_FILE_CHANGED" which manifests as a network disconnect/error
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            // 3. Handle Redirects (Success)
+            if (response.redirected) {
+                window.location.href = response.url;
                 return;
             }
 
-            // Submit immediately
-            form.submit();
+            // 4. Handle Server Errors
+            if (!response.ok) {
+                // Try to get error text/html
+                const errorText = await response.text();
+                // Simple check if it returned the HTML page with an error
+                if (errorText.includes("alert-error")) {
+                    // Parse out the error message if possible, or just default
+                    throw new Error("Server rejected the file (Invalid type or Corrupt)");
+                }
+                throw new Error(`Upload failed with status: ${response.status}`);
+            }
+
+            // Fallback success (should have redirected)
+            window.location.href = "/print-settings";
+
+        } catch (e) {
+            console.error("Upload Error caught:", e);
+
+            // This catch block is where ERR_UPLOAD_FILE_CHANGED lands!
+
+            // Reset UI
+            resetUI(input, overlay);
+
+            // Show Google Drive Guidance
+            if (driveToggle && driveContainer) {
+                driveToggle.checked = true;
+                driveContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Visual cue
+                driveContainer.classList.add('ring-4', 'ring-red-300', 'ring-opacity-50');
+                setTimeout(() => {
+                    driveContainer.classList.remove('ring-4', 'ring-red-300', 'ring-opacity-50');
+                }, 2000);
+            }
+
+            alert("Upload failed. If this file is from Google Drive, please DOWNLOAD it to your device first, then upload it.");
         }
+    }
+
+    function resetUI(input, overlay) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        input.value = "";
     }
 
     // Drag and drop visuals

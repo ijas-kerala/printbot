@@ -1,175 +1,54 @@
 from kivymd.uix.screen import MDScreen
-from kivymd.uix.button import MDFillRoundFlatButton, MDFlatButton
-from kivymd.uix.label import MDLabel
-from kivymd.uix.card import MDCard
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.card import MDCard
+from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDFlatButton, MDFillRoundFlatButton
+from kivymd.uix.screenmanager import MDScreenManager
+from kivymd.uix.transition import MDFadeSlideTransition
 from kivy.uix.image import Image
-from kivy.clock import Clock
+from kivy.properties import StringProperty
 from kiosk.mascot import MascotWidget
 
-class AttractScreen(MDScreen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.layout = MDBoxLayout(orientation='vertical', padding=20, spacing=20)
-        
-        # Mascot
-        self.mascot = MascotWidget(size_hint=(1, 0.6))
-        self.layout.add_widget(self.mascot)
-        
-        # Welcome Text
-        self.label = MDLabel(
-            text="Hi! I'm Printo.\nTouch me to print!",
-            halign="center",
-            font_style="H4",
-            theme_text_color="Primary",
-            size_hint=(1, 0.2)
-        )
-        self.layout.add_widget(self.label)
-        
-        # Invisible button covering screen to trigger start
-        self.start_btn = MDFlatButton(
-            size_hint=(1, 1),
-            pos_hint={'center_x': 0.5, 'center_y': 0.5},
-            on_release=self.goto_connect
-        )
-        self.add_widget(self.layout)
-        self.add_widget(self.start_btn)
+# ==========================================
+# SUB-VIEWS (RIGHT PANEL)
+# ==========================================
 
-    def goto_connect(self, instance):
-        self.manager.current = 'connect'
-
-class ConnectScreen(MDScreen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = MDBoxLayout(orientation='horizontal', padding=40, spacing=20)
-        
-        # Left: Playful Instructions
-        left_panel = MDBoxLayout(orientation='vertical', spacing=10)
-        mascot = MascotWidget(size_hint=(1, 0.4), state="idle")
-        
-        self.title = MDLabel(text="Scan to Upload", font_style="H3", halign="center")
-        self.desc = MDLabel(text="Connect your phone to WiFi or Data.\nScan the code to send me your file!", halign="center")
-        
-        left_panel.add_widget(mascot)
-        left_panel.add_widget(self.title)
-        left_panel.add_widget(self.desc)
-        
-        # Status Label (Hidden by default until update)
-        self.status_label = MDLabel(
-            text="",
-            halign="center",
-            theme_text_color="Custom",
-            text_color=(0, 0, 1, 1), # Blue
-            font_style="Subtitle1"
-        )
-        left_panel.add_widget(self.status_label)
-        
-        # Right: QR Code Card
-        self.qr_card = MDCard(
-            radius=[20,],
-            elevation=4,
-            size_hint=(0.8, 0.8),
-            pos_hint={"center_y": 0.5},
-            md_bg_color=(1, 1, 1, 1) # White
-        )
-        
-        # Placeholder QR
-        # In real app, bind this to the correct Tunnel URL
-        self.qr_img = Image(source="kiosk/assets/qr_placeholder.png")
-        self.qr_card.add_widget(self.qr_img)
-
-        # Processing Spinner (Hidden by default)
-        from kivymd.uix.spinner import MDSpinner
-        self.processing_spinner = MDSpinner(
-            size_hint=(None, None),
-            size=(50, 50),
-            pos_hint={'center_x': 0.5, 'center_y': 0.5},
-            active=False,
-            opacity=0
-        )
-        # We add spinner to the layout but might need to position it better. 
-        # Actually, let's swap QR card content or overlay.
-        # Simplest: Add it to layout, but manage opacity.
-        
-        layout.add_widget(left_panel)
-        # Wrap QR and Spinner in a Frame or just add both and toggle
-        right_container = MDBoxLayout(orientation='vertical', size_hint=(0.8, 0.8), pos_hint={"center_y": 0.5})
-        right_container.add_widget(self.qr_card)
-        
-        # Add spinner to right container (will center it if we play with layout)
-        # Better: Add spinner to the card, removing QR img? No, slow.
-        # Let's just put the spinner in the right_panel area later if needed.
-        # For now, adding to the main layout for visibility control.
-        
-        layout.add_widget(right_container)
-        
-        # Add Spinner to right_container to swap visibility
-        self.right_container = right_container
-        
-        
-        # Admin hidden button (top right)
-        admin_btn = MDFlatButton(
-            text=" ",
-            size_hint=(None, None),
-            size=(50, 50),
-            pos_hint={'top': 1, 'right': 1},
-            on_release=self.open_admin_login
-        )
-        
-        self.add_widget(layout)
-        self.add_widget(admin_btn)
-
-    def set_state(self, state_type):
-        """
-        state_type: 'scan' or 'busy'
-        """
-        if state_type == 'busy':
-            # Hide QR, Show Spinner
-            if self.qr_img in self.qr_card.children:
-                self.qr_card.remove_widget(self.qr_img)
-                self.qr_card.add_widget(self.processing_spinner)
-                self.processing_spinner.active = True
-                self.processing_spinner.opacity = 1
-            self.title.text = "Processing..."
-            self.desc.text = "Please follow the instructions\non your phone."
-            
-        else:
-            # Show QR
-            if self.processing_spinner in self.qr_card.children:
-                self.qr_card.remove_widget(self.processing_spinner)
-                self.qr_card.add_widget(self.qr_img)
-                self.processing_spinner.active = False
-            self.title.text = "Scan to Upload"
-            self.desc.text = "Connect your phone to WiFi or Data.\nScan the code to send me your file!"
-
-
-    def update_status(self, text):
-        """Updates the status label on the connect screen."""
-        if self.status_label:
-            # Animation for smooth text update
-            from kivy.animation import Animation
-            anim = Animation(opacity=0, duration=0.2) + Animation(opacity=1, duration=0.2)
-            anim.bind(on_mid_complete=lambda x,y: setattr(self.status_label, 'text', text))
-            anim.start(self.status_label)
-
-    def open_admin_login(self, instance):
-        print("Admin login triggered")
-        # TODO: Implement pattern lock overlay
-
-class StatusScreen(MDScreen):
+class IdleView(MDScreen):
+    """Shown when no job is active."""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layout = MDBoxLayout(orientation='vertical', padding=40, spacing=20)
         
-        # Mascot
+        # Mascot (Wave/Idle)
+        self.mascot = MascotWidget(size_hint=(1, 0.5), state="wave")
+        self.layout.add_widget(self.mascot)
+        
+        # Welcome Text
+        self.label = MDLabel(
+            text="Welcome to PrintJoy!\nScan the QR code to start.",
+            halign="center",
+            font_style="H4",
+            theme_text_color="Primary"
+        )
+        self.layout.add_widget(self.label)
+        
+        self.add_widget(self.layout)
+
+class ProcessingView(MDScreen):
+    """Shown during upload/payment/printing."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = MDBoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        # Mascot (Happy/Working)
         self.mascot = MascotWidget(size_hint=(1, 0.4), state="happy")
         self.layout.add_widget(self.mascot)
         
-        # Loading Spinner
+        # Spinner
         from kivymd.uix.spinner import MDSpinner
         self.spinner = MDSpinner(
             size_hint=(None, None),
-            size=(50, 50),
+            size=(60, 60),
             pos_hint={'center_x': 0.5},
             active=True
         )
@@ -177,10 +56,11 @@ class StatusScreen(MDScreen):
         
         # Status Text
         self.status_label = MDLabel(
-            text="Initializing Printer...",
+            text="Processing...",
             halign="center",
-            font_style="H4",
-            theme_text_color="Primary"
+            font_style="H5",
+            theme_text_color="Custom",
+            text_color=(0.2, 0.6, 1, 1) # Brand Blueish
         )
         self.layout.add_widget(self.status_label)
         
@@ -188,22 +68,145 @@ class StatusScreen(MDScreen):
 
     def update_status(self, text):
         self.status_label.text = text
-
-class SuccessScreen(MDScreen):
+        # If text implies printing, maybe change mascot to 'working' if we had one
+        
+class ErrorView(MDScreen):
+    """Shown when hardware error occurs."""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layout = MDBoxLayout(orientation='vertical', padding=40, spacing=20)
         
+        # Mascot (Sad)
+        self.mascot = MascotWidget(size_hint=(1, 0.4), state="sad")
+        self.layout.add_widget(self.mascot)
+        
+        # Error Icon (Text for now)
+        self.icon_label = MDLabel(
+            text="⚠️",
+            halign="center",
+            font_style="H2"
+        )
+        self.layout.add_widget(self.icon_label)
+        
+        # Error Text
+        self.error_label = MDLabel(
+            text="Printer Error",
+            halign="center",
+            font_style="H5",
+            theme_text_color="Error"
+        )
+        self.layout.add_widget(self.error_label)
+        
+        self.add_widget(self.layout)
+        
+    def update_error(self, text):
+        self.error_label.text = text
+
+class SuccessView(MDScreen):
+    """Shown when job is complete."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = MDBoxLayout(orientation='vertical', padding=40, spacing=20)
+        
+        # Mascot (Party)
         self.mascot = MascotWidget(size_hint=(1, 0.5), state="happy")
         self.layout.add_widget(self.mascot)
         
-        from kivymd.uix.label import MDLabel
         self.label = MDLabel(
-            text="Printing Complete!\nEnjoy your document.",
+            text="Done! Please collect your paper below.",
             halign="center",
             font_style="H4",
-            theme_text_color="Primary"
+            theme_text_color="Custom",
+            text_color=(0, 0.7, 0, 1) # Green
         )
         self.layout.add_widget(self.label)
         
         self.add_widget(self.layout)
+
+# ==========================================
+# MAIN SPLIT LAYOUT
+# ==========================================
+
+class SplitScreenKiosk(MDScreen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # Root Container (Horizontal Split)
+        # Left: 40%, Right: 60%
+        self.root_box = MDBoxLayout(orientation='horizontal', spacing=0)
+        
+        # -----------------------
+        # LEFT PANEL (Static QR)
+        # -----------------------
+        self.left_panel = MDCard(
+            size_hint_x=0.4,
+            elevation=10,
+            radius=[0, 20, 20, 0], # Rounded on right side
+            md_bg_color=(1, 1, 1, 1),
+            padding=30
+        )
+        left_layout = MDBoxLayout(orientation='vertical', spacing=20, pos_hint={'center_y': 0.5})
+        
+        # Header
+        scan_label = MDLabel(
+            text="Scan to Print",
+            halign="center",
+            font_style="H4",
+            theme_text_color="Custom",
+            text_color=(0.2, 0.2, 0.2, 1),
+            size_hint_y=None,
+            height=60
+        )
+        
+        # QR Code Image
+        # Using a container to keep it square
+        qr_container = MDBoxLayout(size_hint=(1, None), height=300) 
+        self.qr_img = Image(
+            source="kiosk/assets/qr_placeholder.png",
+            fit_mode="contain"
+        )
+        qr_container.add_widget(self.qr_img)
+        
+        # Instruction
+        instr_label = MDLabel(
+            text="No App Needed.\nJust scan to upload file.",
+            halign="center",
+            font_style="Subtitle1",
+            theme_text_color="Hint"
+        )
+        
+        left_layout.add_widget(scan_label)
+        left_layout.add_widget(qr_container)
+        left_layout.add_widget(instr_label)
+        self.left_panel.add_widget(left_layout)
+        
+        # -----------------------
+        # RIGHT PANEL (Dynamic)
+        # -----------------------
+        self.right_panel = MDScreenManager(transition=MDFadeSlideTransition())
+        self.right_panel.add_widget(IdleView(name='idle'))
+        self.right_panel.add_widget(ProcessingView(name='processing'))
+        self.right_panel.add_widget(ErrorView(name='error'))
+        self.right_panel.add_widget(SuccessView(name='success'))
+        
+        # -----------------------
+        # ASSEMBLY
+        # -----------------------
+        self.root_box.add_widget(self.left_panel)
+        self.root_box.add_widget(self.right_panel)
+        
+        self.add_widget(self.root_box)
+        
+        # Admin Hidden Button (Top Right Overlay)
+        admin_btn = MDFlatButton(
+             text=" ",
+             size_hint=(None, None),
+             size=(60, 60),
+             pos_hint={'top': 1, 'right': 1},
+             on_release=self.open_admin
+        )
+        self.add_widget(admin_btn)
+
+    def open_admin(self, instance):
+        print("Admin Triggered")
+        # Feature: 5-tap pattern or long press

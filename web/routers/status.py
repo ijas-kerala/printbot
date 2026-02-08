@@ -22,15 +22,9 @@ def get_machine_status(db: Session = Depends(get_db)):
         if active_job:
             status_text = f"Printing Job #{active_job.id}..."
             state_code = "printing"
-        elif latest_job.status == "payment_pending":
-            status_text = "Waiting for Payment"
-            state_code = "uploading"
-        elif latest_job.status == "uploaded":
-            status_text = "File Uploaded. Configuring..."
-            state_code = "uploading"
-        elif latest_job.status == "paid":
-             status_text = "Processing Job..."
-             state_code = "printing"
+        
+        # Removed: payment_pending, uploaded, paid (As per user request to keep UI clean)
+        # Any state other than Printing/Processing will be treated as Idle (Ready)
     
     return {
         "status": status_text,

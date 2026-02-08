@@ -23,7 +23,7 @@ from requests.exceptions import RequestException
 # Add project root to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kiosk.screens import AttractScreen, ConnectScreen, StatusScreen, SuccessScreen
+from kiosk.screens import SplitScreenKiosk
 from kiosk.mascot import MascotWidget
 
 class PrintJoyApp(MDApp):
@@ -36,13 +36,16 @@ class PrintJoyApp(MDApp):
             self.icon = "kiosk/assets/icon.png"
     
             # Screen Manager
-            sm = MDScreenManager(transition=MDFadeSlideTransition())
-            sm.add_widget(AttractScreen(name='attract'))
-            sm.add_widget(ConnectScreen(name='connect'))
-            sm.add_widget(StatusScreen(name='status'))
-            sm.add_widget(SuccessScreen(name='success'))
+            # sm = MDScreenManager(transition=MDFadeSlideTransition())
+            # sm.add_widget(AttractScreen(name='attract'))
+            # sm.add_widget(ConnectScreen(name='connect'))
+            # sm.add_widget(StatusScreen(name='status'))
+            # sm.add_widget(SuccessScreen(name='success'))
             
-            return sm
+            # New Split Screen Root
+            self.root_widget = SplitScreenKiosk(name='split_root')
+            return self.root_widget
+            
         except Exception as e:
             print(f"CRITICAL BUILD ERROR: {e}")
             raise e
@@ -83,56 +86,62 @@ class PrintJoyApp(MDApp):
     def handle_status_update(self, data):
         """
         State Machine Logic:
-        - idle -> AttractScreen
-        - uploading -> ConnectScreen
-        - printing -> StatusScreen
-        - (Internal) success -> SuccessScreen
+        - idle -> IdleView (Right Panel)
+        - uploading -> ProcessingView (Right Panel)
+        - printing -> ProcessingView (Right Panel)
+        - error -> ErrorView (Right Panel)
+        - (Internal) success -> SuccessView (Right Panel)
         """
         try:
-            current_screen = self.root.current
+            # Get Right Panel ScreenManager
+            # self.root is the SplitScreenKiosk instance
+            if not hasattr(self.root, 'right_panel'):
+                return
+
+            sm = self.root.right_panel
+            current_screen = sm.current
             new_state = data.get("state", "idle")
+            driver_status = data.get("driver_status", "") # Hypothical field from backend
             
-            # Simple State Transition Mapping
-            state_map = {
-                "idle": "attract",
-                "uploading": "connect",
-                "printing": "status"
-            }
+            # Determine Target Screen based on State & Driver Status
+            target_screen = "idle"
             
-            target_screen = state_map.get(new_state, "attract")
+            if new_state == "idle":
+                target_screen = "idle"
+            elif new_state == "uploading":
+                target_screen = "processing"
+            elif new_state == "printing":
+                target_screen = "processing"
             
-            # SPECIAL CASE: Transition from Printing (status) -> Idle (attract)
-            # This implies the job finished successfully. Show Success screen first.
-            if current_screen == 'status' and target_screen == 'attract':
+            # Check for specific error overrides (if backend provides them in top-level or status object)
+            # Assuming data['status'] text might contain "Error" or similar if we don't have codes yet
+            status_text = data.get("status", "")
+            if "Error" in status_text or "Offline" in status_text or "Jam" in status_text:
+                 target_screen = "error"
+
+            # SPECIAL CASE: Transition from Printing/Processing -> Idle
+            # implies success. Show Success screen first.
+            if current_screen == 'processing' and target_screen == 'idle':
                 self.show_success_and_reset()
                 return
 
-            # If we are currently showing success, don't interrupt it with 'idle'
-            if current_screen == 'success' and target_screen == 'attract':
-                return
-
-            # FIX: If user is on Connect Screen (scanning) and backend is Idle,
-            # DO NOT force them back to Attract Screen.
-            if current_screen == 'connect' and target_screen == 'attract':
-                # Just Ensure Connect Screen is in "Scan" mode (Show QR)
-                screen = self.root.get_screen('connect')
-                if hasattr(screen, 'set_state'):
-                    screen.set_state('scan')
-                return
+            if current_screen == 'success':
+                 # Don't interrupt success message until timeout
+                 return
 
             if current_screen != target_screen:
-                self.root.current = target_screen
+                sm.current = target_screen
                 
-            # Update specific screen data if needed
-            if new_state == "printing" or new_state == "uploading":
-                screen = self.root.get_screen(target_screen)
-                if hasattr(screen, 'update_status') and "status" in data:
-                     screen.update_status(data["status"])
-                
-                # Logic to hide QR code if we are in "uploading" state (meaning file exists)
-                if new_state == "uploading" and target_screen == "connect":
-                    if hasattr(screen, 'set_state'):
-                        screen.set_state('busy')
+            # Update specific screen data
+            screen = sm.get_screen(target_screen)
+            
+            if target_screen == "processing":
+                 if hasattr(screen, 'update_status'):
+                     screen.update_status(status_text)
+            
+            if target_screen == "error":
+                 if hasattr(screen, 'update_error'):
+                     screen.update_error(status_text)
 
         except Exception as e:
             print(f"Error in handle_status_update: {e}")
@@ -141,7 +150,8 @@ class PrintJoyApp(MDApp):
         """Switch to Success screen and schedule return to Attract."""
         try:
             print("Job Complete. Showing Success Screen.")
-            self.root.current = 'success'
+            sm = self.root.right_panel
+            sm.current = 'success'
             # Reset to attract screen after 5 seconds
             Clock.unschedule(self.reset_to_attract)
             Clock.schedule_once(self.reset_to_attract, 5.0)
