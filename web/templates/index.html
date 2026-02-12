@@ -60,9 +60,20 @@
 
                 <!-- Loading Overlay (Hidden by default) -->
                 <div id="loading-overlay"
-                    class="absolute inset-0 bg-white/90 z-20 flex-col items-center justify-center rounded-2xl hidden">
-                    <span class="loading loading-spinner loading-lg text-primary mb-2"></span>
-                    <p class="text-brand-600 font-bold animate-pulse">Uploading...</p>
+                    class="absolute inset-0 bg-white/95 z-20 flex-col items-center justify-center rounded-2xl hidden p-6">
+                    <div class="w-full max-w-xs flex flex-col items-center">
+                        <span class="loading loading-spinner loading-lg text-brand-500 mb-4"></span>
+                        <p class="text-brand-600 font-bold mb-4" id="upload-status">Uploading...</p>
+
+                        <!-- Progress Bar Container -->
+                        <div
+                            class="w-full bg-slate-100 rounded-full h-4 mb-2 overflow-hidden border border-brand-100 shadow-inner">
+                            <div id="progress-bar"
+                                class="bg-gradient-to-r from-brand-400 via-brand-500 to-brand-600 h-full w-0 transition-all duration-300 ease-out shadow-lg">
+                            </div>
+                        </div>
+                        <p id="progress-text" class="text-xs font-bold text-brand-600">0%</p>
+                    </div>
                 </div>
 
             </form>
@@ -123,12 +134,16 @@
     async function uploadFile(file) {
         const input = document.querySelector('input[name="file"]');
         const overlay = document.getElementById('loading-overlay');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
         const driveToggle = document.getElementById('google-drive-toggle');
         const driveContainer = document.getElementById('google-drive-container');
 
         // Show loading state
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
+        progressBar.style.width = '0%';
+        progressText.innerText = '0%';
 
         // 1. Pre-upload client-side check (fast fail)
         const maxSize = 90 * 1024 * 1024;
@@ -142,57 +157,58 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        try {
-            // Perform the upload via Fetch API
-            // This allows us to catch "ERR_UPLOAD_FILE_CHANGED" which manifests as a network disconnect/error
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData,
-            });
+        const xhr = new XMLHttpRequest();
 
-            // 3. Handle Redirects (Success)
-            if (response.redirected) {
-                window.location.href = response.url;
-                return;
+        // Listen to progress
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = percent + '%';
+                progressText.innerText = percent + '%';
             }
+        });
 
-            // 4. Handle Server Errors
-            if (!response.ok) {
-                // Try to get error text/html
-                const errorText = await response.text();
-                // Simple check if it returned the HTML page with an error
-                if (errorText.includes("alert-error")) {
-                    // Parse out the error message if possible, or just default
-                    throw new Error("Server rejected the file (Invalid type or Corrupt)");
+        xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                // Success - check for redirection
+                if (xhr.responseURL && xhr.responseURL !== window.location.href) {
+                    window.location.href = xhr.responseURL;
+                } else {
+                    window.location.href = "/print-settings";
                 }
-                throw new Error(`Upload failed with status: ${response.status}`);
+            } else {
+                // Error handling
+                handleUploadError(new Error(`Upload failed with status: ${xhr.status}`), input, overlay, driveToggle, driveContainer);
             }
+        };
 
-            // Fallback success (should have redirected)
-            window.location.href = "/print-settings";
+        xhr.onerror = function () {
+            handleUploadError(new Error("Network Error"), input, overlay, driveToggle, driveContainer);
+        };
 
-        } catch (e) {
-            console.error("Upload Error caught:", e);
+        xhr.open('POST', '/upload', true);
+        xhr.send(formData);
+    }
 
-            // This catch block is where ERR_UPLOAD_FILE_CHANGED lands!
+    function handleUploadError(e, input, overlay, driveToggle, driveContainer) {
+        console.error("Upload Error caught:", e);
 
-            // Reset UI
-            resetUI(input, overlay);
+        // Reset UI
+        resetUI(input, overlay);
 
-            // Show Google Drive Guidance
-            if (driveToggle && driveContainer) {
-                driveToggle.checked = true;
-                driveContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Show Google Drive Guidance
+        if (driveToggle && driveContainer) {
+            driveToggle.checked = true;
+            driveContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                // Visual cue
-                driveContainer.classList.add('ring-4', 'ring-red-300', 'ring-opacity-50');
-                setTimeout(() => {
-                    driveContainer.classList.remove('ring-4', 'ring-red-300', 'ring-opacity-50');
-                }, 2000);
-            }
-
-            alert("Upload failed. If this file is from Google Drive, please DOWNLOAD it to your device first, then upload it.");
+            // Visual cue
+            driveContainer.classList.add('ring-4', 'ring-red-300', 'ring-opacity-50');
+            setTimeout(() => {
+                driveContainer.classList.remove('ring-4', 'ring-red-300', 'ring-opacity-50');
+            }, 2000);
         }
+
+        alert("Upload failed. If this file is from Google Drive, please DOWNLOAD it to your device first, then upload it.");
     }
 
     function resetUI(input, overlay) {

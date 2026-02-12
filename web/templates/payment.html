@@ -42,6 +42,50 @@
 
             <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
             <script>
+                async function verifyPaymentWithRetry(response, retries = 3) {
+                    const msgEl = document.getElementById('payment-message');
+                    
+                    for (let attempt = 1; attempt <= retries; attempt++) {
+                        try {
+                            msgEl.innerText = attempt > 1 
+                                ? `Verifying payment (attempt ${attempt}/${retries})...` 
+                                : "Payment Successful! Verifying...";
+                            
+                            const res = await fetch("/verify-payment", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_signature: response.razorpay_signature
+                                })
+                            });
+                            
+                            if (res.ok) {
+                                const data = await res.json();
+                                msgEl.innerText = "Payment Verified! Redirecting...";
+                                if (data.redirect) {
+                                    window.location.href = data.redirect;
+                                }
+                                return; // Success — exit retry loop
+                            }
+                            
+                            console.warn(`Verify attempt ${attempt} failed: HTTP ${res.status}`);
+                        } catch (err) {
+                            console.warn(`Verify attempt ${attempt} network error:`, err);
+                        }
+                        
+                        // Wait before retrying (exponential backoff: 2s, 4s, 8s)
+                        if (attempt < retries) {
+                            await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+                        }
+                    }
+                    
+                    // All retries failed — show message but HTMX polling is still running as backup
+                    msgEl.innerText = "Payment received! Verification slow — please wait...";
+                    console.log("All verify retries exhausted. Relying on HTMX polling fallback.");
+                }
+
                 var options = {
                     "key": "{{ key_id }}",
                     "amount": "{{ (amount * 100) | int }}",
@@ -51,10 +95,8 @@
                     "image": "/static/printo_idle.png",
                     "order_id": "{{ order_id }}",
                     "handler": function (response) {
-                        document.getElementById('payment-message').innerText = "Payment Successful! Verifying...";
                         document.getElementById('rzp-button1').style.display = 'none';
-                        // Trigger verification immediately
-                        fetch("/payment-status/{{ order_id }}?force=true");
+                        verifyPaymentWithRetry(response);
                     },
                     "modal": {
                         "ondismiss": function () {

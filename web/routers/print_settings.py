@@ -171,9 +171,7 @@ async def process_settings(
          return RedirectResponse(url=f"/success?job_id={job.id}", status_code=303)
 
     db.commit()
-    db.commit()
     
-    # Redirect to payment page
     # Redirect to payment page
     redirect_url = f"/payment/{order_id}"
     
@@ -202,6 +200,62 @@ async def payment_page(request: Request, order_id: str, payment_link: str = None
         "order_id": order_id,
         "key_id": config_settings.RAZORPAY_KEY_ID
     })
+
+@router.post("/verify-payment")
+async def verify_payment(request: Request, db: Session = Depends(get_db)):
+    """
+    Server-side payment verification.
+    Called by the frontend after Razorpay Checkout success handler.
+    Verifies the payment signature and transitions job to 'paid'.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    
+    razorpay_payment_id = data.get("razorpay_payment_id")
+    razorpay_order_id = data.get("razorpay_order_id")
+    razorpay_signature = data.get("razorpay_signature")
+    
+    if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature]):
+        raise HTTPException(status_code=400, detail="Missing payment fields")
+    
+    # Find the job
+    job = db.query(Job).filter(Job.razorpay_order_id == razorpay_order_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Idempotency: already processed
+    if job.status in ("paid", "processing", "printing", "completed"):
+        return {"status": "already_paid", "redirect": f"/success?job_id={job.id}"}
+    
+    # Verify signature with Razorpay
+    if razorpay_service.enabled:
+        try:
+            razorpay_service.client.utility.verify_payment_signature({
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_payment_id': razorpay_payment_id,
+                'razorpay_signature': razorpay_signature
+            })
+        except Exception as e:
+            print(f"❌ Payment Signature Verification Failed: {e}")
+            raise HTTPException(status_code=400, detail="Payment verification failed")
+    
+    # Mark as paid
+    job.status = "paid"
+    job.razorpay_payment_id = razorpay_payment_id
+    db.commit()
+    print(f"✅ Verify-Payment: Job {job.id} marked as PAID (payment: {razorpay_payment_id})")
+    
+    # Trigger processing
+    from web.services.job_processor import job_processor
+    try:
+        job_processor.process_single_job(job.id)
+    except Exception as e:
+        print(f"Trigger Error after verify-payment: {e}")
+    
+    return {"status": "ok", "redirect": f"/success?job_id={job.id}"}
+
 
 @router.get("/payment-status/{order_id}")
 async def check_payment_status(order_id: str, db: Session = Depends(get_db)):
