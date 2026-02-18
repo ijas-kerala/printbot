@@ -1,4 +1,5 @@
 import time
+import threading
 import traceback
 from sqlalchemy.orm import Session
 from core.database import SessionLocal
@@ -6,6 +7,10 @@ from web.models.models import Job
 from web.services.printer_service import printer_service
 
 class JobProcessor:
+    def __init__(self):
+        self._active_jobs = set()
+        self._lock = threading.Lock()
+
     def process_pending_jobs(self):
         """
         Main loop to find and process paid jobs.
@@ -25,10 +30,28 @@ class JobProcessor:
         """
         Process a specific job with robust error handling and retries.
         """
+        # Job-level guard: prevent two threads from processing the same job
+        with self._lock:
+            if job_id in self._active_jobs:
+                print(f"Job #{job_id} already being processed, skipping duplicate trigger.")
+                return
+            self._active_jobs.add(job_id)
+
+        try:
+            self._do_process_job(job_id)
+        finally:
+            with self._lock:
+                self._active_jobs.discard(job_id)
+
+    def _do_process_job(self, job_id: str):
+        """
+        Internal: actual job processing logic.
+        """
         db: Session = SessionLocal()
         job = db.query(Job).filter(Job.id == job_id).first()
         
         if not job:
+            db.close()
             return
 
         print(f"Build-Proof Processor: Starting Job #{job.id}")

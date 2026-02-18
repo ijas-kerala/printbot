@@ -1,4 +1,5 @@
 import os
+import threading
 import subprocess
 import cups
 import fitz  # PyMuPDF
@@ -8,6 +9,7 @@ from core.config import settings
 
 class PrinterService:
     def __init__(self):
+        self._cups_lock = threading.Lock()
         try:
             self.conn = cups.Connection()
         except:
@@ -88,31 +90,32 @@ class PrinterService:
         job_title = f"PrintBot_Job_{job_id}"
 
         try:
-            # Check if printer exists
-            if not self.conn:
-                # Try to reconnect
-                try:
-                    self.conn = cups.Connection()
-                    print("🔄 Reconnected to CUPS service.")
-                except:
-                   pass
-            
-            if not self.conn:
-                raise Exception("Could not connect to CUPS service (Is cupsd running?)")
+            with self._cups_lock:
+                # Check if printer exists
+                if not self.conn:
+                    # Try to reconnect
+                    try:
+                        self.conn = cups.Connection()
+                        print("🔄 Reconnected to CUPS service.")
+                    except:
+                       pass
+                
+                if not self.conn:
+                    raise Exception("Could not connect to CUPS service (Is cupsd running?)")
 
-            printers = self.conn.getPrinters()
-            printer_target = self.printer_name
-            
-            if printer_target not in printers:
-                print(f"Printer {self.printer_name} not found. Available: {list(printers.keys())}")
-                if printers:
-                    printer_target = list(printers.keys())[0] # Fallback
-                else:
-                    raise Exception("No printers found in CUPS.")
+                printers = self.conn.getPrinters()
+                printer_target = self.printer_name
+                
+                if printer_target not in printers:
+                    print(f"Printer {self.printer_name} not found. Available: {list(printers.keys())}")
+                    if printers:
+                        printer_target = list(printers.keys())[0] # Fallback
+                    else:
+                        raise Exception("No printers found in CUPS.")
 
-            print_job_id = self.conn.printFile(printer_target, to_print_path, job_title, options)
-            print(f"Sent to CUPS ({printer_target}). Job ID: {print_job_id}")
-            return print_job_id
+                print_job_id = self.conn.printFile(printer_target, to_print_path, job_title, options)
+                print(f"Sent to CUPS ({printer_target}). Job ID: {print_job_id}")
+                return print_job_id
         except Exception as e:
             print(f"Printing failed: {e}")
             return None
@@ -165,22 +168,23 @@ class PrinterService:
              return {"state": "stopped", "reasons": ["offline"], "message": "Printer Service Unreachable"}
 
         try:
-            # Discover available printers and use fallback if configured printer doesn't exist
-            printers = self.conn.getPrinters()
-            printer_target = self.printer_name
-            
-            if printer_target not in printers:
-                print(f"Printer {self.printer_name} not found for status check. Available: {list(printers.keys())}")
-                if printers:
-                    printer_target = list(printers.keys())[0]  # Fallback to first available
-                else:
-                    return {"state": "stopped", "reasons": ["no-printer-found"], "message": "No Printers Available"}
-            
-            # Fetch attributes for the target printer
-            # printer-state: 3 (Idle), 4 (Processing), 5 (Stopped)
-            attrs = self.conn.getPrinterAttributes(printer_target, requested_attributes=["printer-state", # 3,4,5
-                                                                                          "printer-state-reasons", # List of strings e.g 'media-empty-warning'
-                                                                                          "printer-state-message"])
+            with self._cups_lock:
+                # Discover available printers and use fallback if configured printer doesn't exist
+                printers = self.conn.getPrinters()
+                printer_target = self.printer_name
+                
+                if printer_target not in printers:
+                    print(f"Printer {self.printer_name} not found for status check. Available: {list(printers.keys())}")
+                    if printers:
+                        printer_target = list(printers.keys())[0]  # Fallback to first available
+                    else:
+                        return {"state": "stopped", "reasons": ["no-printer-found"], "message": "No Printers Available"}
+                
+                # Fetch attributes for the target printer
+                # printer-state: 3 (Idle), 4 (Processing), 5 (Stopped)
+                attrs = self.conn.getPrinterAttributes(printer_target, requested_attributes=["printer-state", # 3,4,5
+                                                                                              "printer-state-reasons", # List of strings e.g 'media-empty-warning'
+                                                                                              "printer-state-message"])
             
             raw_state = attrs.get('printer-state', 3)
             reasons = attrs.get('printer-state-reasons', [])
@@ -214,20 +218,21 @@ class PrinterService:
              return {"status": "printing", "position": None}
              
         try:
-             # Get all active jobs (not completed)
-             jobs = self.conn.getJobs(which_jobs="not-completed", my_jobs=True)
-             
-             if cups_job_id not in jobs:
-                 # Job not in active queue, assume completed
-                 return {"status": "completed", "position": None}
-             
-             # Get detailed attributes for this specific job
-             try:
-                 attrs = self.conn.getJobAttributes(cups_job_id, requested_attributes=["job-state"])
-                 job_state = attrs.get('job-state', 5)  # Default to Processing if unknown
-             except:
-                 # Fallback: if we can't get attributes, assume it's processing
-                 job_state = 5
+             with self._cups_lock:
+                 # Get all active jobs (not completed)
+                 jobs = self.conn.getJobs(which_jobs="not-completed", my_jobs=True)
+                 
+                 if cups_job_id not in jobs:
+                     # Job not in active queue, assume completed
+                     return {"status": "completed", "position": None}
+                 
+                 # Get detailed attributes for this specific job
+                 try:
+                     attrs = self.conn.getJobAttributes(cups_job_id, requested_attributes=["job-state"])
+                     job_state = attrs.get('job-state', 5)  # Default to Processing if unknown
+                 except:
+                     # Fallback: if we can't get attributes, assume it's processing
+                     job_state = 5
              
              # Map CUPS job-state to our status
              # 3: Pending, 4: Held, 5: Processing, 6: Stopped, 7: Canceled, 8: Aborted, 9: Completed

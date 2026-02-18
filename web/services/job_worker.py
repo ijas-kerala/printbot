@@ -7,11 +7,6 @@ from web.models.models import Job
 from web.services.printer_service import printer_service
 import traceback
 
-def process_jobs():
-    """
-    Background worker that checks for 'paid' jobs and processes them.
-    In a real app, this might be a Celery task.
-    """
 from web.services.job_processor import job_processor
 
 def process_jobs():
