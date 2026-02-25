@@ -91,38 +91,99 @@ To allow users to upload files from their phones without being on the same local
     cloudflared tunnel run printbot
     ```
 
-## 4. Running the Application Services
+## 4. Running the Application Services (Auto-Start on Boot)
 
-To ensure the PrintBot runs automatically when the Pi turns on:
+The project includes two `systemd` service files that automatically start the backend and kiosk on boot.
 
-### 1. Configure Services
-Copy the service files to the system directory:
+| Service File | Description |
+| :--- | :--- |
+| `printbot-backend.service` | Starts the FastAPI/Uvicorn web server |
+| `printbot-kivy.service` | Starts the KivyMD touchscreen kiosk UI (depends on backend) |
+
+> **Important**: Both service files use `User=ijas`. If your Raspberry Pi username is different, open each `.service` file and change `User=` and all paths (`WorkingDirectory`, `EnvironmentFile`, `ExecStart`) to match your actual username before copying them.
+
+### Step 1 — Verify Your Username in the Service Files
+
+Open each file and confirm `User=` and all paths match your system:
+
+```bash
+# Check your username
+whoami
+
+# Edit if needed
+nano printbot-backend.service
+nano printbot-kivy.service
+```
+
+### Step 2 — Copy Service Files to systemd
 
 ```bash
 sudo cp printbot-backend.service /etc/systemd/system/
 sudo cp printbot-kivy.service /etc/systemd/system/
 ```
 
-### 2. Enable and Start
+### Step 3 — Reload systemd and Enable Services
+
 ```bash
 sudo systemctl daemon-reload
+
+# Enable to auto-start on every boot
 sudo systemctl enable printbot-backend
 sudo systemctl enable printbot-kivy
+```
 
-# Start them now
+### Step 4 — Start Services Now (without rebooting)
+
+```bash
 sudo systemctl start printbot-backend
 sudo systemctl start printbot-kivy
 ```
 
-### 3. Verification
-Check the status of the services:
+### Step 5 — Check Service Status
+
 ```bash
-# Backend Status
+# Backend
 sudo systemctl status printbot-backend
 
-# Kiosk UI Status
+# Kiosk UI
 sudo systemctl status printbot-kivy
 ```
+
+You should see `Active: active (running)` for both.
+
+### Step 6 — View Live Logs
+
+Both services write logs to the system journal. Use `journalctl` to tail them:
+
+```bash
+# Backend logs (live)
+sudo journalctl -u printbot-backend -f
+
+# Kiosk logs (live)
+sudo journalctl -u printbot-kivy -f
+```
+
+### Stopping / Disabling Services
+
+```bash
+# Stop immediately
+sudo systemctl stop printbot-backend
+sudo systemctl stop printbot-kivy
+
+# Disable auto-start on boot
+sudo systemctl disable printbot-backend
+sudo systemctl disable printbot-kivy
+```
+
+### Troubleshooting Auto-Start
+
+| Symptom | Fix |
+| :--- | :--- |
+| `User=pi` not found error | Edit service files and set `User=ijas` (your actual username) |
+| Backend fails — `.env` not loaded | Ensure `.env` exists at `/home/ijas/printbot1/.env` |
+| Kiosk fails — `Unable to get a Window` | Confirm `DISPLAY=:0` and `XAUTHORITY=/home/ijas/.Xauthority` in `printbot-kivy.service` |
+| Kiosk fails — `XDG_RUNTIME_DIR` error | Confirm `Environment=XDG_RUNTIME_DIR=/run/user/1000` is set. Replace `1000` with your actual UID (`id -u`) |
+| Service doesn't restart after crash | Check `Restart=always` and `RestartSec=5` are present in the `[Service]` block |
 
 ## 5. Connecting from Other Devices
 

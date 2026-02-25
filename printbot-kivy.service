@@ -1,19 +1,22 @@
 [Unit]
 Description=PrintJoy Kiosk Interface
-After=network.target graphical.target
+After=network.target graphical.target printbot-backend.service
 Wants=graphical.target
+Requires=printbot-backend.service
 
 [Service]
-User=pi
+User=ijas
 WorkingDirectory=/home/ijas/printbot1
+EnvironmentFile=/home/ijas/printbot1/.env
 Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/ijas/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=KIVY_NO_CONSOLELOG=1
 ExecStart=/home/ijas/printbot1/venv/bin/python3 kiosk/main.py
 Restart=always
-RestartSec=3
-WatchdogSec=10
-StandardOutput=append:/home/ijas/printjoy_logs/kiosk.log
-StandardError=append:/home/ijas/printjoy_logs/kiosk_error.log
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=graphical.target

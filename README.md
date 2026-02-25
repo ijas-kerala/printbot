@@ -67,22 +67,43 @@ python kiosk/main.py
 ```
 
 ### Auto-Start Service (Production)
-Enable systemd services to start on boot.
 
-1. Copy service files:
+Enable systemd services so PrintJoy starts automatically on every boot.
+
+> **Before copying**: Open `printbot-backend.service` and `printbot-kivy.service` and confirm `User=ijas` matches your Raspberry Pi username (`whoami`). Update all paths if different.
+
+**1. Copy service files:**
 ```bash
 sudo cp printbot-backend.service /etc/systemd/system/
 sudo cp printbot-kivy.service /etc/systemd/system/
 ```
 
-2. Reload and Enable:
+**2. Reload, enable, and start:**
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable printbot-backend
-sudo systemctl enable printbot-kivy
-sudo systemctl start printbot-backend
-sudo systemctl start printbot-kivy
+sudo systemctl enable printbot-backend printbot-kivy
+sudo systemctl start printbot-backend printbot-kivy
 ```
+
+**3. Verify both are running:**
+```bash
+sudo systemctl status printbot-backend
+sudo systemctl status printbot-kivy
+```
+
+**4. View live logs:**
+```bash
+sudo journalctl -u printbot-backend -f   # Backend logs
+sudo journalctl -u printbot-kivy -f      # Kiosk logs
+```
+
+**5. Stop or disable:**
+```bash
+sudo systemctl stop printbot-backend printbot-kivy
+sudo systemctl disable printbot-backend printbot-kivy
+```
+
+> For the full setup guide including Cloudflare Tunnel, troubleshooting, and common fixes — see [SETUP.md](SETUP.md).
 
 ## Admin Dashboard
 - URL: `http://<PI_IP>:8000/admin` (or via Tunnel URL /admin)
