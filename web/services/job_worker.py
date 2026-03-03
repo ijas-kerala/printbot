@@ -87,6 +87,44 @@ def payment_recovery_worker():
                         
                     except Exception as e:
                         print(f"Recovery check error for job {job.id}: {e}")
+                
+                # --- POWER-CUT RECOVERY ---
+                # Jobs stuck in 'processing' or 'printing' for > 5 minutes
+                # were likely killed by a power cut mid-print.
+                # Mark them as failed with a refund coupon (do NOT retry to avoid double-printing).
+                stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                stuck_processing = db.query(Job).filter(
+                    Job.status.in_(["processing", "printing"]),
+                    Job.created_at < stuck_cutoff
+                ).all()
+                
+                for job in stuck_processing:
+                    try:
+                        print(f"⚡ Power-cut recovery: Job {job.id} stuck in '{job.status}' → marking failed.")
+                        job.status = "failed"
+                        db.commit()
+                        
+                        # Generate refund coupon if one doesn't already exist
+                        from web.models.models import Coupon
+                        existing = db.query(Coupon).filter(Coupon.original_job_id == job.id).first()
+                        
+                        if not existing and job.total_cost > 0:
+                            import uuid
+                            code = f"RETRY-{uuid.uuid4().hex[:4].upper()}"
+                            while db.query(Coupon).filter(Coupon.code == code).first():
+                                code = f"RETRY-{uuid.uuid4().hex[:4].upper()}"
+                            
+                            coupon = Coupon(
+                                code=code,
+                                amount=job.total_cost,
+                                initial_amount=job.total_cost,
+                                original_job_id=job.id
+                            )
+                            db.add(coupon)
+                            db.commit()
+                            print(f"💰 Coupon generated for power-cut job {job.id}: {code} (₹{job.total_cost})")
+                    except Exception as e:
+                        print(f"Power-cut recovery error for job {job.id}: {e}")
                         
             finally:
                 db.close()

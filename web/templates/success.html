@@ -31,13 +31,38 @@
             </p>
 
             {% if job_id %}
+            <div
+                class="mt-3 inline-flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-full px-4 py-1.5">
+                <span class="text-xs text-slate-400 font-medium">Job ID</span>
+                <span id="job-id-display" class="text-sm font-mono font-bold text-slate-600 select-all">{{ job_id[:12]
+                    }}</span>
+                <button
+                    onclick="navigator.clipboard.writeText('{{ job_id }}'); this.innerText='✓'; setTimeout(()=>this.innerText='📋', 1500)"
+                    class="text-sm hover:scale-110 transition-transform" title="Copy full Job ID">📋</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Note this down in case you need help</p>
+            {% endif %}
+
+            {% if job_id %}
             <script>
                 (function () {
                     const msgEl = document.getElementById('status-message');
                     const titleEl = document.getElementById('status-title');
                     const jobId = msgEl.getAttribute('data-job-id');
+                    let pollCount = 0;
+                    const MAX_POLLS = 120; // 2s × 120 = 4 minutes
 
                     function checkStatus() {
+                        // Timeout: stop polling after 4 minutes
+                        if (pollCount >= MAX_POLLS) {
+                            titleEl.innerText = "Still Working...";
+                            titleEl.className = "text-3xl font-heading font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-orange-500 mb-2";
+                            msgEl.innerHTML = `Taking longer than expected.<br>
+                                Please check the print tray, or show your <strong>Job ID</strong> to staff.`;
+                            return;
+                        }
+                        pollCount++;
+
                         fetch(`/jobs/${jobId}/status`)
                             .then(r => r.json())
                             .then(data => {
@@ -100,7 +125,11 @@
                                     setTimeout(checkStatus, 2000);
                                 }
                             })
-                            .catch(e => console.error("Status Poll Error:", e));
+                            .catch(e => {
+                                console.error("Status Poll Error:", e);
+                                // On network error, keep trying (don't count as timeout)
+                                setTimeout(checkStatus, 3000);
+                            });
                     }
 
                     // Start polling after 1s
